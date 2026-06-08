@@ -30,7 +30,7 @@ services:
     runtime: static
     rootDir: frontend
     buildCommand: npm ci && node scripts/set-api-url.js && npm run build
-    staticPublishPath: frontend/dist/clinica-estoque-frontend/browser
+    staticPublishPath: dist/clinica-estoque-frontend/browser
     envVars:
       - key: VITALLOG_API_URL
         fromService:
