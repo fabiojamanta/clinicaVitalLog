@@ -1,0 +1,41 @@
+# Blueprint Render (plano gratuito) — https://render.com
+# Conecte este repositório no Render e use "New > Blueprint".
+
+databases:
+  - name: vitallog-db
+    plan: free
+    databaseName: vitallog
+    user: vitallog
+
+services:
+  - type: web
+    name: vitallog-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vitallog-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+
+  - type: web
+    name: vitallog-frontend
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && node scripts/set-api-url.js && npm run build
+    staticPublishPath: dist/clinica-estoque-frontend/browser
+    envVars:
+      - key: VITALLOG_API_URL
+        fromService:
+          type: web
+          name: vitallog-api
+          envVarKey: RENDER_EXTERNAL_URL
