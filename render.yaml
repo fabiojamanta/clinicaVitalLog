@@ -29,7 +29,6 @@ services:
   - type: web
     name: vitallog-frontend
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && node scripts/set-api-url.js && npm run build
     staticPublishPath: dist/clinica-estoque-frontend/browser
