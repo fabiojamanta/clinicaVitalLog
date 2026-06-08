@@ -51,13 +51,38 @@ migrate_sqlite()
 def seed():
     db = SessionLocal()
     try:
-        if not db.query(Clinic).first():
-            db.add(Clinic(id=1, name="Clínica Principal", active=True))
+        clinic = db.query(Clinic).filter(Clinic.id == 1).first()
+        if not clinic:
+            clinic = Clinic(id=1, name="Clínica Principal", active=True)
+            db.add(clinic)
+            db.flush()
+
         if not db.query(User).filter(User.email == "admin_clinica.com").first():
-            db.add(User(clinic_id=1, name="Administrador", email="admin_clinica.com", password_hash=get_password_hash("admin123"), role=UserRole.administrador, active=True))
-        if not db.query(Client).filter(Client.clinic_id == 1, Client.name == settings.WRITE_OFF_CLIENT_NAME).first():
-            db.add(Client(clinic_id=1, name=settings.WRITE_OFF_CLIENT_NAME, client_type=ClientType.setor_interno, notes="Destinatário interno para baixa de produtos vencidos", active=True))
+            db.add(User(
+                clinic_id=clinic.id,
+                name="Administrador",
+                email="admin_clinica.com",
+                password_hash=get_password_hash("admin123"),
+                role=UserRole.administrador,
+                active=True,
+            ))
+
+        if not db.query(Client).filter(
+            Client.clinic_id == clinic.id,
+            Client.name == settings.WRITE_OFF_CLIENT_NAME,
+        ).first():
+            db.add(Client(
+                clinic_id=clinic.id,
+                name=settings.WRITE_OFF_CLIENT_NAME,
+                client_type=ClientType.setor_interno,
+                notes="Destinatário interno para baixa de produtos vencidos",
+                active=True,
+            ))
+
         db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 seed()
