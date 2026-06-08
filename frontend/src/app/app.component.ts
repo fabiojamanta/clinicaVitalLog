@@ -1,10 +1,19 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { filter } from 'rxjs';
 import { AuthService } from './services/auth.service';
 import { ThemeService } from './services/theme.service';
 import { BRAND_LOGO, BRAND_NAME } from './shared/page-logos';
+import {
+  NAV_MENU,
+  NavMenuEntry,
+  NavMenuGroup,
+  filterNavMenu,
+  isGroupActive,
+} from './core/nav-menu';
+
+const HOVER_CLOSE_DELAY_MS = 250;
 
 @Component({
   selector: 'app-root',
@@ -35,17 +44,52 @@ import { BRAND_LOGO, BRAND_NAME } from './shared/page-logos';
 
     <div id="nav-panel" class="nav-panel" [class.is-open]="menuOpen">
       <ul class="nav-links">
-        @if(auth.canShowMenuItem('dashboard')){<li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="closeMenu()">Dashboard</a></li>}
-        @if(auth.canShowMenuItem('fornecedores')){<li><a routerLink="/fornecedores" routerLinkActive="active" (click)="closeMenu()">Fornecedores</a></li>}
-        @if(auth.canShowMenuItem('clientes')){<li><a routerLink="/clientes" routerLinkActive="active" (click)="closeMenu()">Clientes</a></li>}
-        @if(auth.canShowMenuItem('produtos')){<li><a routerLink="/produtos" routerLinkActive="active" (click)="closeMenu()">Produtos</a></li>}
-        @if(auth.canShowMenuItem('entradas')){<li><a routerLink="/entradas" routerLinkActive="active" (click)="closeMenu()">Entradas</a></li>}
-        @if(auth.canShowMenuItem('saidas')){<li><a routerLink="/saidas" routerLinkActive="active" (click)="closeMenu()">Saídas</a></li>}
-        @if(auth.canShowMenuItem('atendimentos')){<li><a routerLink="/atendimentos" routerLinkActive="active" (click)="closeMenu()">Atendimentos</a></li>}
-        @if(auth.canShowMenuItem('atendimentos_pendentes')){<li><a routerLink="/atendimentos-pendentes" routerLinkActive="active" (click)="closeMenu()">Atendimentos Pendentes</a></li>}
-        @if(auth.canShowMenuItem('relatorios')){<li><a routerLink="/relatorios" routerLinkActive="active" (click)="closeMenu()">Relatórios</a></li>}
-        @if(auth.canShowMenuItem('usuarios')){<li><a routerLink="/usuarios" routerLinkActive="active" (click)="closeMenu()">Usuários</a></li>}
-        @if(auth.canShowMenuItem('auditoria')){<li><a routerLink="/auditoria" routerLinkActive="active" (click)="closeMenu()">Auditoria</a></li>}
+        @for (entry of navEntries; track trackEntry($index, entry)) {
+          @if (entry.type === 'link') {
+            <li>
+              <a
+                [routerLink]="entry.route"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: !!entry.exact }"
+                (click)="closeMenu()"
+              >{{ entry.label }}</a>
+            </li>
+          } @else {
+            <li
+              class="nav-item-group"
+              [class.is-open]="isGroupOpen(entry.id)"
+              [class.is-active]="isGroupActive(entry)"
+              (mouseenter)="onGroupEnter(entry.id)"
+              (mouseleave)="onGroupLeave(entry.id)"
+            >
+              <button
+                type="button"
+                class="nav-group-trigger"
+                [attr.aria-expanded]="isGroupOpen(entry.id)"
+                (click)="toggleGroup(entry.id)"
+              >
+                {{ entry.label }}
+                <span class="nav-group-chevron" aria-hidden="true"></span>
+              </button>
+              <ul class="nav-submenu">
+                @for (child of entry.children; track child.route) {
+                  <li>
+                    @if (auth.canShowMenuItem(child.menuItem)) {
+                      <a
+                        [routerLink]="child.route"
+                        routerLinkActive="active"
+                        [routerLinkActiveOptions]="{ exact: !!child.exact }"
+                        (click)="closeMenu()"
+                      >{{ child.label }}</a>
+                    } @else {
+                      <span class="nav-submenu-disabled">{{ child.label }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            </li>
+          }
+        }
       </ul>
 
       <div class="nav-actions">
@@ -60,21 +104,42 @@ import { BRAND_LOGO, BRAND_NAME } from './shared/page-logos';
   <main class="main"><router-outlet /></main>
 </div>}`,
 })
-export class AppComponent {
+export class AppComponent implements OnDestroy {
   menuOpen = false;
+  openGroups = new Set<string>();
+  hoverGroupId: string | null = null;
+  navEntries: NavMenuEntry[] = [];
   readonly brandName = BRAND_NAME;
   readonly brandLogo = BRAND_LOGO;
+
+  private closeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private router: Router,
     public auth: AuthService,
     public theme: ThemeService,
   ) {
-    this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe(() => this.closeMenu());
+    this.refreshNav();
+    this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe(() => {
+      this.refreshNav();
+      this.clearHoverGroup();
+      this.closeMenu();
+    });
+  }
+
+  ngOnDestroy() {
+    for (const timer of this.closeTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.closeTimers.clear();
   }
 
   isLoginPage() {
     return this.router.url.startsWith('/login');
+  }
+
+  trackEntry(_index: number, entry: NavMenuEntry): string {
+    return entry.type === 'link' ? entry.route : entry.id;
   }
 
   toggleMenu() {
@@ -83,6 +148,42 @@ export class AppComponent {
 
   closeMenu() {
     this.menuOpen = false;
+    this.openGroups.clear();
+    this.clearHoverGroup();
+  }
+
+  onGroupEnter(id: string) {
+    this.clearCloseTimer(id);
+    this.hoverGroupId = id;
+  }
+
+  onGroupLeave(id: string) {
+    this.clearCloseTimer(id);
+    this.closeTimers.set(
+      id,
+      setTimeout(() => {
+        this.closeTimers.delete(id);
+        if (this.hoverGroupId === id) {
+          this.hoverGroupId = null;
+        }
+      }, HOVER_CLOSE_DELAY_MS),
+    );
+  }
+
+  toggleGroup(id: string) {
+    if (this.openGroups.has(id)) {
+      this.openGroups.delete(id);
+    } else {
+      this.openGroups.add(id);
+    }
+  }
+
+  isGroupOpen(id: string) {
+    return this.hoverGroupId === id || this.openGroups.has(id);
+  }
+
+  isGroupActive(group: NavMenuGroup) {
+    return isGroupActive(this.router.url, group.children);
   }
 
   logout(e: Event) {
@@ -90,5 +191,25 @@ export class AppComponent {
     this.closeMenu();
     this.auth.logout();
     this.router.navigateByUrl('/login');
+  }
+
+  private refreshNav() {
+    this.navEntries = filterNavMenu(NAV_MENU, (item) => this.auth.canShowMenuItem(item));
+  }
+
+  private clearCloseTimer(id: string) {
+    const timer = this.closeTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.closeTimers.delete(id);
+    }
+  }
+
+  private clearHoverGroup() {
+    for (const timer of this.closeTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.closeTimers.clear();
+    this.hoverGroupId = null;
   }
 }
