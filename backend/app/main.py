@@ -34,6 +34,34 @@ def migrate_sqlite():
                 conn.execute(text("ALTER TABLE stock_exits ADD COLUMN exit_type VARCHAR(20) DEFAULT 'consumo'"))
             if "attendance_id" not in exit_cols:
                 conn.execute(text("ALTER TABLE stock_exits ADD COLUMN attendance_id INTEGER"))
+
+            user_cols = {c[1] for c in conn.execute(text("PRAGMA table_info('users')")).fetchall()}
+            if "cargo" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN cargo VARCHAR(120)"))
+            if "phone" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(40)"))
+
+            client_cols = {c[1] for c in conn.execute(text("PRAGMA table_info('clients')")).fetchall()}
+            if "address" not in client_cols:
+                conn.execute(text("ALTER TABLE clients ADD COLUMN address VARCHAR(255)"))
+            if "city" not in client_cols:
+                conn.execute(text("ALTER TABLE clients ADD COLUMN city VARCHAR(120)"))
+            if "responsible_name" not in client_cols:
+                conn.execute(text("ALTER TABLE clients ADD COLUMN responsible_name VARCHAR(180)"))
+            if "state" not in client_cols:
+                conn.execute(text("ALTER TABLE clients ADD COLUMN state VARCHAR(2)"))
+    except Exception:
+        pass
+
+    try:
+        with engine.begin() as conn:
+            if not settings.DATABASE_URL.startswith("sqlite"):
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cargo VARCHAR(120)"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(40)"))
+                conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS address VARCHAR(255)"))
+                conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS city VARCHAR(120)"))
+                conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS responsible_name VARCHAR(180)"))
+                conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS state VARCHAR(2)"))
     except Exception:
         pass
 
@@ -75,7 +103,7 @@ def seed():
                 clinic_id=clinic.id,
                 name=settings.WRITE_OFF_CLIENT_NAME,
                 client_type=ClientType.setor_interno,
-                notes="Destinatário interno para baixa de produtos vencidos",
+                notes="Cliente interno para baixa de produtos vencidos",
                 active=True,
             ))
 

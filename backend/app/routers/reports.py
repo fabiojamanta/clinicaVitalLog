@@ -351,7 +351,7 @@ def report_pdf(
             line(f"{r['product_name']} | Lote: {r['lot_number']} | Validade: {r['expiration_date']} | Dias: {r['days_remaining']} | Qtd: {r['current_stock']} | {r['situation']}")
     elif kind == "saidas":
         for r in rows:
-            line(f"{r['exit_date']} | {r['product_name']} | Lote {r['lot_number']} | Destino: {r['client_name']} | Qtd: {r['quantity']} | Por: {r['user_name']} | {r['status']} | {r['exit_type_label']}")
+            line(f"{r['exit_date']} | {r['product_name']} | Lote {r['lot_number']} | Cliente: {r['client_name']} | Qtd: {r['quantity']} | Por: {r['user_name']} | {r['status']} | {r['exit_type_label']}")
     elif kind == "fornecedores":
         for r in rows:
             line(f"{r['name']} | Doc: {r['document']} | Tel: {r['phone']} | Email: {r['email']} | Produtos: {r['products_count']} | Ativo: {r['active']}")

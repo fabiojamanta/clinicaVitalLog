@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { FormModalComponent } from '../../shared/form-modal.component';
+import { PhoneBrPipe } from '../../core/phone-br.pipe';
+import { formatPhoneBr, stripDigits } from '../../core/format.util';
 
 const ROLE_LABELS: Record<string, string> = {
   administrador: 'Administrador',
@@ -13,12 +15,13 @@ const ROLE_LABELS: Record<string, string> = {
   medico: 'Médico',
   enfermeira: 'Enfermagem',
   tecnica_enfermagem: 'Técnica de enfermagem',
+  vendedor: 'Vendedor',
 };
 
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, FormModalComponent],
+  imports: [CommonModule, FormsModule, FormModalComponent, PhoneBrPipe],
   template: `
 <div class="top">
   <div class="page-head">
@@ -36,6 +39,16 @@ const ROLE_LABELS: Record<string, string> = {
   <div class="grid grid-3">
     <div><label>Nome</label><input [(ngModel)]="form.name"></div>
     <div><label>Email</label><input [(ngModel)]="form.email" type="email"></div>
+    <div><label>Cargo</label><input [(ngModel)]="form.cargo" placeholder="Ex.: Gerente de estoque"></div>
+    <div>
+      <label>Telefone</label>
+      <input
+        [ngModel]="form.phone"
+        (ngModelChange)="onPhoneChange($event)"
+        inputmode="tel"
+        placeholder="(11) 97604-1558"
+      >
+    </div>
     <div>
       <label>Senha</label>
       <input type="password" [(ngModel)]="form.password" [placeholder]="editingId ? 'Deixe em branco para manter' : 'Obrigatória'">
@@ -50,6 +63,7 @@ const ROLE_LABELS: Record<string, string> = {
         <option value="medico">Médico</option>
         <option value="enfermeira">Enfermagem</option>
         <option value="tecnica_enfermagem">Técnica de enfermagem</option>
+        <option value="vendedor">Vendedor</option>
       </select>
     </div>
     <div>
@@ -69,7 +83,7 @@ const ROLE_LABELS: Record<string, string> = {
 <div class="card table-wrap">
   <table>
     <thead>
-      <tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Ativo</th></tr>
+      <tr><th>Nome</th><th>Email</th><th>Cargo</th><th>Telefone</th><th>Perfil</th><th>Ativo</th></tr>
     </thead>
     <tbody>
       @for(i of rows; track i.id){
@@ -80,6 +94,8 @@ const ROLE_LABELS: Record<string, string> = {
         >
           <td>{{i.name}}</td>
           <td>{{i.email}}</td>
+          <td>{{i.cargo || '—'}}</td>
+          <td>{{i.phone | phoneBr}}</td>
           <td>{{roleLabel(i.role)}}</td>
           <td><span class="badge" [class.ok]="i.active" [class.danger]="!i.active">{{i.active ? 'Sim' : 'Não'}}</span></td>
         </tr>
@@ -96,6 +112,8 @@ export class UsersComponent implements OnInit {
   form: any = {
     name: '',
     email: '',
+    cargo: '',
+    phone: '',
     password: '',
     role: 'operacional',
     active: true,
@@ -118,6 +136,10 @@ export class UsersComponent implements OnInit {
     return ROLE_LABELS[role] || role;
   }
 
+  onPhoneChange(value: string) {
+    this.form.phone = formatPhoneBr(value);
+  }
+
   load() {
     this.api.get<any[]>('/users').subscribe((r) => (this.rows = r));
   }
@@ -132,6 +154,8 @@ export class UsersComponent implements OnInit {
     this.form = {
       name: row.name ?? '',
       email: row.email ?? '',
+      cargo: row.cargo ?? '',
+      phone: formatPhoneBr(row.phone),
       password: '',
       role: row.role ?? 'operacional',
       active: row.active ?? true,
@@ -150,6 +174,8 @@ export class UsersComponent implements OnInit {
     this.form = {
       name: '',
       email: '',
+      cargo: '',
+      phone: '',
       password: '',
       role: 'operacional',
       active: true,
@@ -166,6 +192,8 @@ export class UsersComponent implements OnInit {
     const payload = {
       name: this.form.name,
       email: this.form.email,
+      cargo: this.form.cargo?.trim() || null,
+      phone: stripDigits(this.form.phone) || null,
       role: this.form.role,
       active: this.form.active,
       password: this.form.password?.trim() || null,

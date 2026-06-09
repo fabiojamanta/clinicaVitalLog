@@ -26,7 +26,7 @@ import { PAGE_LOGOS } from '../../shared/page-logos';
   </article>
   <article class="card">
     <h3>Saídas</h3>
-    <p>Histórico de retiradas por produto, lote e destinatário.</p>
+    <p>Histórico de retiradas por produto, lote e cliente.</p>
     <a class="btn" routerLink="/relatorios/saidas">Abrir relatório</a>
   </article>
   <article class="card report-card">
@@ -44,7 +44,7 @@ import { PAGE_LOGOS } from '../../shared/page-logos';
   <article class="card report-card">
     <img class="report-card-logo" [src]="logos.cliente" alt="Clientes" />
     <h3>Clientes</h3>
-    <p>Destinatários cadastrados por tipo e situação.</p>
+    <p>Clientes cadastrados por tipo e situação.</p>
     <a class="btn" routerLink="/relatorios/clientes">Abrir relatório</a>
   </article>
 </div>

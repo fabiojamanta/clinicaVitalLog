@@ -8,14 +8,14 @@ Sistema web para controle de estoque de clínica médica — controle para sua c
 - Usuário inicial administrador
 - Cadastro de usuários e perfis
 - Cadastro de fornecedores
-- Cadastro de clientes/destinatários com tipo: paciente, médico, setor interno, funcionário ou outro
+- Cadastro de clientes com tipo: paciente, médico, setor interno, funcionário ou outro
 - Cadastro de produtos com fornecedor e código de barras, tipo, estoque mínimo e alerta de vencimento
 - Entrada de estoque informando lote (texto) e validade no momento da entrada, com código único por entrada (`ENT` + clínica + id, ex.: `ENT0100000042`)
 - Etiqueta PDF com código de barras para impressão (`GET /entries/{id}/label.pdf` ou botão **Etiqueta** na tela Entradas)
 - Mesmo produto, lote e validade somam estoque no mesmo registro de lote
 - Saída por código de entrada ou seleção manual de produto/lote
 - Baixa de produto vencido para reduzir estoque de lotes expirados
-- Saída de estoque por lote e destinatário
+- Saída de estoque por lote e cliente
 - Bloqueio de saída para lote vencido ou bloqueado
 - Validação de estoque insuficiente
 - Cancelamento de saída com devolução de estoque
@@ -32,8 +32,8 @@ O back-end valida cada operação; o front-end espelha as mesmas regras em [`fro
 | Perfil | Menu | Gravação / ações |
 |--------|------|------------------|
 | **Administrador** | Tudo | Tudo (inclui usuários, auditoria e cancelar qualquer saída) |
-| **Estoque** | Tudo exceto Usuários e Auditoria | Cadastros, entradas, saídas, baixa de vencido, editar destinatários |
-| **Operacional** | Dashboard, Clientes, Saídas, Relatórios | Criar destinatário; saída de consumo; cancelar **próprias** saídas |
+| **Estoque** | Tudo exceto Usuários e Auditoria | Cadastros, entradas, saídas, baixa de vencido, editar clientes |
+| **Operacional** | Dashboard, Clientes, Saídas, Relatórios | Criar cliente; saída de consumo; cancelar **próprias** saídas |
 | **Consulta** | Dashboard, Fornecedores, Clientes, Produtos, Relatórios | Somente leitura nos cadastros; sem Entradas/Saídas |
 
 Rotas bloqueadas por perfil redirecionam para o Dashboard. Telas de cadastro para **Consulta** exibem apenas a tabela (sem formulário Salvar/Editar).

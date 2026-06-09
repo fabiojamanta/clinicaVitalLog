@@ -99,14 +99,14 @@ const REPORTS: Record<string, ReportConfig> = {
   saidas: {
     kind: 'saidas',
     title: 'Saídas',
-    description: 'Histórico de retiradas por produto, lote e destinatário.',
+    description: 'Histórico de retiradas por produto, lote e cliente.',
     apiPath: '/reports/saidas',
     pdfKind: 'saidas',
     columns: [
       { key: 'exit_date', label: 'Data', type: 'date' },
       { key: 'product_name', label: 'Produto' },
       { key: 'lot_number', label: 'Lote' },
-      { key: 'client_name', label: 'Destinatário' },
+      { key: 'client_name', label: 'Cliente' },
       { key: 'quantity', label: 'Quantidade' },
       { key: 'user_name', label: 'Registrado por' },
       { key: 'exit_type_label', label: 'Tipo' },
@@ -139,7 +139,7 @@ const REPORTS: Record<string, ReportConfig> = {
   clientes: {
     kind: 'clientes',
     title: 'Clientes',
-    description: 'Destinatários cadastrados por tipo e situação.',
+    description: 'Clientes cadastrados por tipo e situação.',
     apiPath: '/reports/clientes',
     pdfKind: 'clientes',
     logoSrc: PAGE_LOGOS.cliente,
@@ -263,7 +263,7 @@ const REPORTS: Record<string, ReportConfig> = {
       }
       @if(config.kind === 'saidas'){
         <div>
-          <label>Destinatário</label>
+          <label>Cliente</label>
           <select [(ngModel)]="filters.client_id">
             <option [ngValue]="0">Todos</option>
             @for (c of clients; track c.id) {
@@ -317,7 +317,7 @@ const REPORTS: Record<string, ReportConfig> = {
       }
       @if(config.kind === 'clientes'){
         <div>
-          <label>Destinatário</label>
+          <label>Cliente</label>
           <select [(ngModel)]="filters.client_id">
             <option [ngValue]="0">Todos</option>
             @for (c of clients; track c.id) {

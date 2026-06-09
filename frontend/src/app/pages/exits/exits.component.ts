@@ -25,7 +25,7 @@ type EntryLookup = {
   standalone: true,
   imports: [CommonModule, FormsModule, DateBrPipe],
   template: `
-<div class="top"><div class="page-title"><h1>Saídas de estoque</h1><p>Controle de retirada por destinatário, produto e lote.</p></div></div>
+<div class="top"><div class="page-title"><h1>Saídas de estoque</h1><p>Controle de retirada por cliente, produto e lote.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
 @if(auth.canCreateExit()){
 <div class="card grid grid-3">
@@ -46,7 +46,7 @@ type EntryLookup = {
   <div><label>Lote</label><select [(ngModel)]="form.lot_id" (ngModelChange)="onLotChange()"><option [ngValue]="0">Selecione</option>@for(l of filteredLots;track l.id){<option [ngValue]="l.id">Lote {{l.lot_number}} · val {{l.expiration_date | dateBr}}@if(l.expired){ (vencido)}</option>}</select></div>
   <div><label>Saldo</label><input type="number" [ngModel]="selectedLotStock" readonly tabindex="-1"></div>
   <div><label>Data Saída</label><input type="date" [(ngModel)]="form.exit_date"></div>
-  <div><label>Destinatário</label><select [(ngModel)]="form.client_id"><option [ngValue]="0">Selecione</option>@for(c of clients;track c.id){<option [ngValue]="c.id">{{c.name}} · {{c.client_type}}</option>}</select></div>
+  <div><label>Cliente</label><select [(ngModel)]="form.client_id"><option [ngValue]="0">Selecione</option>@for(c of clients;track c.id){<option [ngValue]="c.id">{{c.name}} · {{c.client_type}}</option>}</select></div>
   <div><label>Quantidade</label><input type="number" [(ngModel)]="form.quantity"></div>
   <div><label>Motivo</label><input [(ngModel)]="form.reason" [placeholder]="writeOffMode ? 'Obrigatório para baixa' : ''"></div>
   <div class="form-actions"><button type="button" class="btn" (click)="save()">Salvar</button></div>
@@ -64,7 +64,7 @@ type EntryLookup = {
 }
 <div class="card table-wrap">
   <table>
-    <tr><th>Data</th><th>Tipo</th><th>Produto</th><th>Lote</th><th>Destinatário</th><th>Qtd</th><th>Registrado por</th><th>Status</th><th>Ações</th></tr>
+    <tr><th>Data</th><th>Tipo</th><th>Produto</th><th>Lote</th><th>Cliente</th><th>Qtd</th><th>Registrado por</th><th>Status</th><th>Ações</th></tr>
     @for(i of rows;track i.id){
       <tr>
         <td>{{i.exit_date | dateBr}}</td>

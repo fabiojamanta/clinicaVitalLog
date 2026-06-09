@@ -18,6 +18,19 @@ def _normalize_contact_fields(data: dict) -> dict:
         data["document"] = digits_only(data.get("document"))
     if "phone" in data:
         data["phone"] = digits_only(data.get("phone"))
+    for text_field in ("address", "city", "responsible_name", "email", "notes"):
+        if text_field in data and data[text_field] is not None:
+            data[text_field] = data[text_field].strip() or None
+    if "state" in data:
+        uf = (data.get("state") or "").strip().upper()
+        data["state"] = uf[:2] if uf else None
+    return data
+
+def _normalize_user_fields(data: dict) -> dict:
+    if "phone" in data:
+        data["phone"] = digits_only(data.get("phone"))
+    if "cargo" in data and data["cargo"] is not None:
+        data["cargo"] = data["cargo"].strip() or None
     return data
 
 # Usuários
@@ -29,9 +42,19 @@ def list_users(db: Session = Depends(get_db), user: User = Depends(require_roles
 def create_user(payload: UserCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador))):
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(400, "Email já cadastrado")
-    obj = User(clinic_id=user.clinic_id, name=payload.name, email=payload.email, password_hash=get_password_hash(payload.password), role=payload.role, active=payload.active)
+    data = _normalize_user_fields(payload.model_dump())
+    obj = User(
+        clinic_id=user.clinic_id,
+        name=data["name"],
+        email=data["email"],
+        cargo=data.get("cargo"),
+        phone=data.get("phone"),
+        password_hash=get_password_hash(payload.password),
+        role=payload.role,
+        active=payload.active,
+    )
     db.add(obj); db.flush()
-    log_action(db, user, "create", "users", obj.id, after={"name": obj.name, "email": obj.email, "role": obj.role.value}, request=request)
+    log_action(db, user, "create", "users", obj.id, after={"name": obj.name, "email": obj.email, "cargo": obj.cargo, "phone": obj.phone, "role": obj.role.value}, request=request)
     db.commit(); db.refresh(obj)
     return obj
 
@@ -50,8 +73,11 @@ def update_user(
     if other:
         raise HTTPException(400, "Email já cadastrado")
     before = {c.name: getattr(obj, c.name) for c in obj.__table__.columns if c.name != "password_hash"}
-    obj.name = payload.name
-    obj.email = payload.email
+    data = _normalize_user_fields(payload.model_dump())
+    obj.name = data["name"]
+    obj.email = data["email"]
+    obj.cargo = data.get("cargo")
+    obj.phone = data.get("phone")
     obj.role = payload.role
     obj.active = payload.active
     if payload.password and payload.password.strip():
@@ -59,6 +85,8 @@ def update_user(
     after = {
         "name": obj.name,
         "email": obj.email,
+        "cargo": obj.cargo,
+        "phone": obj.phone,
         "role": obj.role.value,
         "active": obj.active,
         "password_changed": bool(payload.password and payload.password.strip()),

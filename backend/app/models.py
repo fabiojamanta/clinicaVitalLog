@@ -33,6 +33,7 @@ class UserRole(str, enum.Enum):
     medico = "medico"
     enfermeira = "enfermeira"
     tecnica_enfermagem = "tecnica_enfermagem"
+    vendedor = "vendedor"
 
 class Clinic(Base):
     __tablename__ = "clinics"
@@ -48,6 +49,8 @@ class User(Base):
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
     name = Column(String(160), nullable=False)
     email = Column(String(160), unique=True, index=True, nullable=False)
+    cargo = Column(String(120))
+    phone = Column(String(40))
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), default=UserRole.administrador, nullable=False)
     active = Column(Boolean, default=True)
@@ -76,6 +79,10 @@ class Client(Base):
     document = Column(String(40))
     phone = Column(String(40))
     email = Column(String(160))
+    address = Column(String(255))
+    city = Column(String(120))
+    responsible_name = Column(String(180))
+    state = Column(String(2))
     notes = Column(Text)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())

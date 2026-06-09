@@ -16,6 +16,8 @@ class Login(BaseModel):
 class UserBase(BaseModel):
     name: str
     email: str
+    cargo: Optional[str] = None
+    phone: Optional[str] = None
     role: UserRole = UserRole.operacional
     active: bool = True
 
@@ -25,6 +27,8 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     name: str
     email: str
+    cargo: Optional[str] = None
+    phone: Optional[str] = None
     role: UserRole = UserRole.operacional
     active: bool = True
     password: Optional[str] = None
@@ -58,6 +62,10 @@ class ClientBase(BaseModel):
     document: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    responsible_name: Optional[str] = None
+    state: Optional[str] = None
     notes: Optional[str] = None
     active: bool = True
 class ClientCreate(ClientBase): pass

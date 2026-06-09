@@ -145,7 +145,7 @@ def create_attendance(
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
     if patient.client_type != ClientType.paciente:
-        raise HTTPException(400, "O destinatário selecionado não é um paciente")
+        raise HTTPException(400, "O cliente selecionado não é um paciente")
 
     existing = (
         db.query(Attendance)

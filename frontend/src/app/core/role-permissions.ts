@@ -5,7 +5,8 @@ export type UserRole =
   | 'consulta'
   | 'medico'
   | 'enfermeira'
-  | 'tecnica_enfermagem';
+  | 'tecnica_enfermagem'
+  | 'vendedor';
 
 export type MenuItem =
   | 'dashboard'
@@ -28,7 +29,10 @@ const ALL_ROLES: UserRole[] = [
   'medico',
   'enfermeira',
   'tecnica_enfermagem',
+  'vendedor',
 ];
+
+const ROLES_WITH_REPORTS: UserRole[] = ALL_ROLES.filter((role) => role !== 'vendedor');
 
 const ATTENDANCE_ROLES: UserRole[] = ['medico', 'enfermeira', 'tecnica_enfermagem'];
 const PENDING_ATTENDANCE_ROLES: UserRole[] = ['enfermeira', 'tecnica_enfermagem'];
@@ -47,7 +51,8 @@ export function normalizeRole(value: unknown): UserRole | null {
     value === 'consulta' ||
     value === 'medico' ||
     value === 'enfermeira' ||
-    value === 'tecnica_enfermagem'
+    value === 'tecnica_enfermagem' ||
+    value === 'vendedor'
   ) {
     return value;
   }
@@ -57,8 +62,9 @@ export function normalizeRole(value: unknown): UserRole | null {
 export function canShowMenuItem(role: UserRole | null | undefined, item: MenuItem): boolean {
   switch (item) {
     case 'dashboard':
-    case 'relatorios':
       return hasRole(role, ALL_ROLES);
+    case 'relatorios':
+      return hasRole(role, ROLES_WITH_REPORTS);
     case 'fornecedores':
     case 'produtos':
       return hasRole(role, ['estoque', 'consulta']);
@@ -83,7 +89,7 @@ export function canShowMenuItem(role: UserRole | null | undefined, item: MenuIte
 export function canAccessRoute(role: UserRole | null | undefined, path: string): boolean {
   const p = path.split('?')[0];
   if (p === '/' || p === '') return hasRole(role, ALL_ROLES);
-  if (p.startsWith('/relatorios')) return hasRole(role, ALL_ROLES);
+  if (p.startsWith('/relatorios')) return hasRole(role, ROLES_WITH_REPORTS);
   if (p === '/fornecedores' || p === '/produtos') {
     return hasRole(role, ['estoque', 'consulta']);
   }
@@ -206,6 +212,8 @@ export function roleLabel(role: UserRole | null | undefined): string {
       return 'Enfermagem';
     case 'tecnica_enfermagem':
       return 'Técnica de enfermagem';
+    case 'vendedor':
+      return 'Vendedor';
     default:
       return '';
   }
