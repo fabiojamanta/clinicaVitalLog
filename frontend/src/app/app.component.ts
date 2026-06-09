@@ -21,28 +21,28 @@ const HOVER_CLOSE_DELAY_MS = 250;
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
   template: `
 @if(isLoginPage()){ <router-outlet /> } @else {
-<div class="layout">
+<div class="layout app-shell" [class.menu-open]="menuOpen">
   @if(menuOpen){ <button type="button" class="nav-backdrop" aria-label="Fechar menu" (click)="closeMenu()"></button> }
-  <nav class="navbar" aria-label="Menu principal">
-    <div class="logo">
+
+  <div class="app-top-nav navbar app-shell-nav" aria-label="Menu principal">
+    <div class="app-header-bar">
       <a routerLink="/" class="logo-link" (click)="closeMenu()">
         <img class="nav-brand-logo" [src]="brandLogo" [alt]="brandName" />
       </a>
+      <button
+        type="button"
+        class="nav-toggle"
+        [class.is-open]="menuOpen"
+        [attr.aria-expanded]="menuOpen"
+        aria-controls="nav-panel"
+        aria-label="Abrir ou fechar menu"
+        (click)="toggleMenu()"
+      >
+        <span></span><span></span><span></span>
+      </button>
     </div>
 
-    <button
-      type="button"
-      class="nav-toggle"
-      [class.is-open]="menuOpen"
-      [attr.aria-expanded]="menuOpen"
-      aria-controls="nav-panel"
-      aria-label="Abrir ou fechar menu"
-      (click)="toggleMenu()"
-    >
-      <span></span><span></span><span></span>
-    </button>
-
-    <div id="nav-panel" class="nav-panel" [class.is-open]="menuOpen">
+    <aside id="nav-panel" class="nav-panel app-drawer" [class.is-open]="menuOpen" aria-label="Navegação">
       <ul class="nav-links">
         @for (entry of navEntries; track trackEntry($index, entry)) {
           @if (entry.type === 'link') {
@@ -99,9 +99,10 @@ const HOVER_CLOSE_DELAY_MS = 250;
         <button type="button" class="nav-theme-btn" (click)="theme.toggle()">{{ theme.label() }}</button>
         <a href="#" class="nav-cta" (click)="logout($event)">Sair</a>
       </div>
-    </div>
-  </nav>
-  <main class="main"><router-outlet /></main>
+    </aside>
+  </div>
+
+  <main class="main app-content"><router-outlet /></main>
 </div>}`,
 })
 export class AppComponent implements OnDestroy {

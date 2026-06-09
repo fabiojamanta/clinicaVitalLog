@@ -35,11 +35,27 @@
                 }
               ],
               "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
             }
           },
           "defaultConfiguration": "production"
         },
-        "serve": {"builder": "@angular-devkit/build-angular:dev-server", "options": {"buildTarget": "clinica-estoque-frontend:build"}}
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "clinica-estoque-frontend:build:production"
+            },
+            "development": {
+              "buildTarget": "clinica-estoque-frontend:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        }
       }
     }
   },
