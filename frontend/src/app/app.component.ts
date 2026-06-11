@@ -20,8 +20,8 @@ const HOVER_CLOSE_DELAY_MS = 250;
   standalone: true,
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
   template: `
-@if(isLoginPage()){ <router-outlet /> } @else {
-<div class="layout app-shell" [class.menu-open]="menuOpen">
+<div class="layout app-shell" [class.menu-open]="menuOpen" [class.public-page]="isPublicPage()">
+  @if(!isPublicPage()){
   @if(menuOpen){ <button type="button" class="nav-backdrop" aria-label="Fechar menu" (click)="closeMenu()"></button> }
 
   <div class="app-top-nav navbar app-shell-nav" aria-label="Menu principal">
@@ -101,9 +101,14 @@ const HOVER_CLOSE_DELAY_MS = 250;
       </div>
     </aside>
   </div>
+  }
 
-  <main class="main app-content"><router-outlet /></main>
-</div>}`,
+  <main class="main app-content" [class.public-content]="isPublicPage()"><router-outlet /></main>
+</div>`,
+  styles: [`
+    .layout.public-page { min-height: 100vh; }
+    .main.public-content { padding: 0; max-width: none; }
+  `],
 })
 export class AppComponent implements OnDestroy {
   menuOpen = false;
@@ -135,8 +140,9 @@ export class AppComponent implements OnDestroy {
     this.closeTimers.clear();
   }
 
-  isLoginPage() {
-    return this.router.url.startsWith('/login') || this.router.url.startsWith('/assinar');
+  isPublicPage() {
+    const path = this.router.url.split('?')[0] || window.location.pathname;
+    return path.startsWith('/login') || path.startsWith('/assinar');
   }
 
   trackEntry(_index: number, entry: NavMenuEntry): string {

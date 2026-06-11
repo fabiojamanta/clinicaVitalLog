@@ -72,7 +72,17 @@ type PublicSignInfo = {
       flex-direction: column;
       gap: 12px;
       min-height: 100vh;
+      color: #0f172a;
+      font-family: "Plus Jakarta Sans", system-ui, sans-serif;
     }
+    .public-sign-page .card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .public-sign-page h2, .public-sign-page h3 { margin: 0 0 8px; }
+    .public-sign-page .hint { color: #64748b; }
+    .public-sign-page .error { color: #b42318; background: #fdecea; padding: 10px; border-radius: 8px; }
     .pre-wrap { white-space: pre-wrap; }
   `],
 })
@@ -91,7 +101,20 @@ export class PublicSignComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.token = this.route.snapshot.paramMap.get('token') || '';
+    this.route.paramMap.subscribe((params) => {
+      this.token = params.get('token') || '';
+      if (!this.token) {
+        this.fatalError = 'Link inválido.';
+        this.loading = false;
+        return;
+      }
+      this.loadInfo();
+    });
+  }
+
+  private loadInfo() {
+    this.loading = true;
+    this.fatalError = '';
     this.api.get<PublicSignInfo>(`/public/sign/${this.token}`).subscribe({
       next: (r) => {
         this.info = r;
