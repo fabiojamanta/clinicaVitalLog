@@ -1,4 +1,5 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+﻿import { Component, OnDestroy, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -9,6 +10,7 @@ import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { SignaturePadComponent } from '../../shared/signature-pad.component';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
 
 type SessionExit = {
   id: number;
@@ -45,7 +47,7 @@ type TreatmentSession = {
 @Component({
   selector: 'app-treatment-session',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, SignaturePadComponent, ReadonlyBannerComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, SignaturePadComponent, ReadonlyBannerComponent, SearchSelectComponent],
   template: `
 <app-readonly-banner [show]="auth.isReadOnlyMenu('atendimentos')"></app-readonly-banner>
 <div class="top">
@@ -79,7 +81,15 @@ type TreatmentSession = {
 <div class="card">
   <h3>Saída de medicamentos da sessão</h3>
   <div class="grid grid-3">
-    <div><label>Produto</label><select [(ngModel)]="dispense.product_id" (ngModelChange)="dispense.lot_id=0"><option [ngValue]="0">Selecione</option>@for(p of products;track p.id){<option [ngValue]="p.id">{{p.name}}</option>}</select></div>
+    <div>
+      <app-search-select
+        fieldLabel="Produto"
+        searchPath="/products"
+        placeholder="Digite o nome do produto"
+        [(ngModel)]="dispense.product_id"
+        (ngModelChange)="dispense.lot_id = 0"
+      ></app-search-select>
+    </div>
     <div><label>Lote</label><select [(ngModel)]="dispense.lot_id"><option [ngValue]="0">Selecione</option>@for(l of filteredLots;track l.id){<option [ngValue]="l.id">Lote {{l.lot_number}} · val {{l.expiration_date | dateBr}}</option>}</select></div>
     <div><label>Saldo</label><input type="number" [ngModel]="selectedLotStock" readonly tabindex="-1"></div>
     <div><label>Quantidade</label><input type="number" [(ngModel)]="dispense.quantity"></div>
@@ -189,7 +199,6 @@ type TreatmentSession = {
 })
 export class TreatmentSessionComponent implements OnInit, OnDestroy {
   s: TreatmentSession | null = null;
-  products: any[] = [];
   lots: any[] = [];
   error = '';
   info = '';
@@ -214,7 +223,6 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.api.get<any[]>('/products').subscribe((r) => (this.products = r));
     this.api.get<any[]>('/lots').subscribe((r) => (this.lots = r));
     this.route.paramMap.subscribe((p) => {
       const id = Number(p.get('id'));
@@ -230,7 +238,7 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
     this.error = '';
     this.api.get<TreatmentSession>(`/treatment-sessions/${id}`).subscribe({
       next: (s) => this.setSession(s),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar sessão'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar sessão')),
     });
   }
 
@@ -290,7 +298,7 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
         this.api.get<any[]>('/lots').subscribe((r) => (this.lots = r));
         this.load(this.s!.id);
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao dar saída no medicamento'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao dar saída no medicamento')),
     });
   }
 
@@ -307,7 +315,7 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
           this.setSession(s);
           this.info = 'Sessão registrada e enviada para a enfermeira.';
         },
-        error: (e) => (this.error = e.error?.detail || 'Erro ao salvar sessão'),
+        error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar sessão')),
       });
   }
 
@@ -324,7 +332,7 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
           this.setSession(s);
           this.info = 'Sessão finalizada.';
         },
-        error: (e) => (this.error = e.error?.detail || 'Erro ao finalizar sessão'),
+        error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao finalizar sessão')),
       });
   }
 
@@ -336,7 +344,7 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
         this.setSession(s);
         this.showSignModal = false;
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao registrar assinatura'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao registrar assinatura')),
     });
   }
 
@@ -356,7 +364,7 @@ export class TreatmentSessionComponent implements OnInit, OnDestroy {
         this.showLinkModal = true;
         this.startPolling();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao gerar link de assinatura'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao gerar link de assinatura')),
     });
   }
 

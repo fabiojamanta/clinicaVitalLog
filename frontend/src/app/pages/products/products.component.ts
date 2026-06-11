@@ -1,16 +1,18 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { PageHeaderComponent } from '../../shared/page-header.component';
 import { FormModalComponent } from '../../shared/form-modal.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
 import { PAGE_LOGOS } from '../../shared/page-logos';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-products',
   standalone: true,
-  imports: [CommonModule, FormsModule, PageHeaderComponent, FormModalComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, FormModalComponent, SearchSelectComponent],
   template: `
 <app-page-header
   title="Produtos"
@@ -29,11 +31,15 @@ import { AuthService } from '../../services/auth.service';
   @if(error){<div class="error">{{error}}</div>}
   <div class="grid grid-3">
     <div><label>Nome</label><input [(ngModel)]="form.name"></div>
-    <div><label>Fornecedor</label>
-      <select [(ngModel)]="form.supplier_id">
-        <option [ngValue]="null">Selecione</option>
-        @for(s of suppliers; track s.id){<option [ngValue]="s.id">{{s.name}}</option>}
-      </select>
+    <div>
+      <app-search-select
+        fieldLabel="Fornecedor"
+        searchPath="/suppliers"
+        placeholder="Digite o nome do fornecedor"
+        [ngModel]="form.supplier_id ?? 0"
+        (ngModelChange)="form.supplier_id = $event || null"
+        [initialLabel]="supplierInitialLabel"
+      ></app-search-select>
     </div>
     <div><label>Código de barras</label><input [(ngModel)]="form.barcode"></div>
     <div><label>Tipo</label>
@@ -83,9 +89,9 @@ import { AuthService } from '../../services/auth.service';
 export class ProductsComponent implements OnInit {
   logo = PAGE_LOGOS.produto;
   rows: any[] = [];
-  suppliers: any[] = [];
   editingId: number | null = null;
   modalOpen = false;
+  supplierInitialLabel = '';
   error = '';
   form: any = {
     name: '',
@@ -106,7 +112,6 @@ export class ProductsComponent implements OnInit {
 
   ngOnInit() {
     this.load();
-    this.api.get<any[]>('/suppliers').subscribe((r) => (this.suppliers = r));
   }
 
   modalTitle() {
@@ -125,6 +130,7 @@ export class ProductsComponent implements OnInit {
   edit(row: any) {
     if (!this.auth.canUpdateProduct()) return;
     this.editingId = row.id;
+    this.supplierInitialLabel = row.supplier_name ?? '';
     this.form = {
       name: row.name ?? '',
       supplier_id: row.supplier_id ?? null,
@@ -147,6 +153,7 @@ export class ProductsComponent implements OnInit {
 
   resetForm() {
     this.editingId = null;
+    this.supplierInitialLabel = '';
     this.form = {
       name: '',
       supplier_id: null,
@@ -173,7 +180,7 @@ export class ProductsComponent implements OnInit {
         this.closeModal();
         this.load();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar produto'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar produto')),
     });
   }
 }

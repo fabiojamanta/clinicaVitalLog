@@ -1,9 +1,12 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
+import { SearchSelectComponent } from '../../shared/search-select.component';
+import { patientSearchParams } from '../../core/search-select.util';
 
 type PendingItem = {
   id: number;
@@ -26,18 +29,21 @@ type PendingItem = {
 @Component({
   selector: 'app-attendance-pending',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe],
+  imports: [CommonModule, FormsModule, DateBrPipe, SearchSelectComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Pendências</h1><p>Atendimentos e sessões de tratamento aguardando ação no fluxo.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
 
 <div class="card grid grid-3">
   <div>
-    <label>Filtrar por paciente</label>
-    <select [(ngModel)]="patientId" (ngModelChange)="load()">
-      <option [ngValue]="0">Todos os pacientes</option>
-      @for(p of patients;track p.id){<option [ngValue]="p.id">{{p.name}}</option>}
-    </select>
+    <app-search-select
+      fieldLabel="Filtrar por paciente"
+      searchPath="/clients"
+      [queryParams]="patientSearchParams"
+      placeholder="Digite para filtrar ou deixe vazio para todos"
+      [(ngModel)]="patientId"
+      (ngModelChange)="load()"
+    ></app-search-select>
   </div>
 </div>
 
@@ -71,8 +77,8 @@ type PendingItem = {
 </div>`,
 })
 export class AttendancePendingComponent implements OnInit {
+  readonly patientSearchParams = patientSearchParams;
   rows: PendingItem[] = [];
-  patients: any[] = [];
   patientId = 0;
   error = '';
 
@@ -82,9 +88,6 @@ export class AttendancePendingComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.api.get<any[]>('/clients').subscribe((r) => {
-      this.patients = r.filter((c) => c.client_type === 'paciente' && c.active);
-    });
     this.load();
   }
 
@@ -94,7 +97,7 @@ export class AttendancePendingComponent implements OnInit {
       .get<PendingItem[]>('/attendances/pending', { patient_id: this.patientId || null })
       .subscribe({
         next: (r) => (this.rows = r),
-        error: (e) => (this.error = e.error?.detail || 'Erro ao carregar pendências'),
+        error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar pendências')),
       });
   }
 

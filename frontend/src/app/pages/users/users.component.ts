@@ -7,6 +7,7 @@ import { FormModalComponent } from '../../shared/form-modal.component';
 import { PhoneBrPipe } from '../../core/phone-br.pipe';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 import { formatPhoneBr, stripDigits } from '../../core/format.util';
+import { formatApiError } from '../../core/api-error.util';
 
 type ProfileOption = { id: number; name: string; slug: string };
 
@@ -157,6 +158,11 @@ export class UsersComponent implements OnInit {
       this.error = 'Informe a senha do novo usuário';
       return;
     }
+    const password = this.form.password?.trim() ?? '';
+    if (password && password.length < 8) {
+      this.error = 'Senha: deve ter no mínimo 8 caracteres';
+      return;
+    }
     const payload = {
       name: this.form.name,
       email: this.form.email,
@@ -170,7 +176,7 @@ export class UsersComponent implements OnInit {
       : this.api.post('/users', { ...payload, password: this.form.password });
     req.subscribe({
       next: () => { this.closeModal(); this.load(); },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar usuário'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar usuário')),
     });
   }
 }

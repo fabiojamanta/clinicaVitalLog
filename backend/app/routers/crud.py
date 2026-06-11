@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from ..database import get_db
@@ -144,8 +145,17 @@ def update_user(
 
 # Fornecedores
 @router.get("/suppliers", response_model=list[SupplierRead])
-def list_suppliers(db: Session = Depends(get_db), user: User = Depends(require_menu_access("fornecedores", AccessLevel.read))):
-    return db.query(Supplier).filter(Supplier.clinic_id == user.clinic_id).order_by(Supplier.name).all()
+def list_suppliers(
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_menu_access("fornecedores", AccessLevel.read)),
+):
+    query = db.query(Supplier).filter(Supplier.clinic_id == user.clinic_id)
+    if q and len(q.strip()) >= 3:
+        query = query.filter(Supplier.name.ilike(f"%{q.strip()}%")).order_by(Supplier.name).limit(50)
+    else:
+        query = query.order_by(Supplier.name)
+    return query.all()
 
 @router.post("/suppliers", response_model=SupplierRead)
 def create_supplier(payload: SupplierCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("fornecedores", AccessLevel.write))):
@@ -170,8 +180,23 @@ def update_supplier(id: int, payload: SupplierCreate, request: Request, db: Sess
 
 # Clientes
 @router.get("/clients", response_model=list[ClientRead])
-def list_clients(db: Session = Depends(get_db), user: User = Depends(require_menu_access("clientes", AccessLevel.read))):
-    return db.query(Client).filter(Client.clinic_id == user.clinic_id).order_by(Client.name).all()
+def list_clients(
+    q: Optional[str] = None,
+    client_type: Optional[str] = None,
+    active_only: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_menu_access("clientes", AccessLevel.read)),
+):
+    query = db.query(Client).filter(Client.clinic_id == user.clinic_id)
+    if client_type:
+        query = query.filter(Client.client_type == client_type)
+    if active_only:
+        query = query.filter(Client.active == True)
+    if q and len(q.strip()) >= 3:
+        query = query.filter(Client.name.ilike(f"%{q.strip()}%")).order_by(Client.name).limit(50)
+    else:
+        query = query.order_by(Client.name)
+    return query.all()
 
 @router.post("/clients", response_model=ClientRead)
 def create_client(payload: ClientCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("clientes", AccessLevel.write))):
@@ -196,8 +221,17 @@ def update_client(id: int, payload: ClientCreate, request: Request, db: Session 
 
 # Produtos
 @router.get("/products", response_model=list[ProductRead])
-def list_products(db: Session = Depends(get_db), user: User = Depends(require_menu_access("produtos", AccessLevel.read))):
-    products = db.query(Product).filter(Product.clinic_id == user.clinic_id).order_by(Product.name).all()
+def list_products(
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_menu_access("produtos", AccessLevel.read)),
+):
+    query = db.query(Product).filter(Product.clinic_id == user.clinic_id)
+    if q and len(q.strip()) >= 3:
+        query = query.filter(Product.name.ilike(f"%{q.strip()}%")).order_by(Product.name).limit(50)
+    else:
+        query = query.order_by(Product.name)
+    products = query.all()
     result = []
     for p in products:
         total = db.query(func.coalesce(func.sum(Lot.current_stock), 0)).filter(Lot.product_id == p.id, Lot.active == True).scalar() or 0

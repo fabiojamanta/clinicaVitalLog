@@ -1,8 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { SuccessDialogComponent } from '../../shared/success-dialog.component';
 
 type Profile = {
   id: number;
@@ -19,7 +21,7 @@ type MenuRow = { menu_key: string; label: string; access_level: string };
 @Component({
   selector: 'app-permissions',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SuccessDialogComponent],
   template: `
 <div class="top">
   <div class="page-title">
@@ -63,12 +65,20 @@ type MenuRow = { menu_key: string; label: string; access_level: string };
     <div class="form-actions"><button type="button" class="btn" (click)="savePermissions()">Salvar permissões</button></div>
   }
 </div>
-}`,
+}
+
+<app-success-dialog
+  [open]="savedPopup"
+  title="Salvo"
+  message="Permissões salvas com sucesso."
+  (close)="savedPopup = false"
+></app-success-dialog>`,
 })
 export class PermissionsComponent implements OnInit {
   profiles: Profile[] = [];
   selectedProfileId = 0;
   permissionRows: MenuRow[] = [];
+  savedPopup = false;
   error = '';
 
   constructor(
@@ -93,7 +103,7 @@ export class PermissionsComponent implements OnInit {
           this.loadPermissions();
         }
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar perfis'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar perfis')),
     });
   }
 
@@ -101,7 +111,7 @@ export class PermissionsComponent implements OnInit {
     if (!this.selectedProfileId) return;
     this.api.get<{ permissions: MenuRow[] }>(`/profiles/${this.selectedProfileId}/permissions`).subscribe({
       next: (r) => (this.permissionRows = r.permissions),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar permissões'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar permissões')),
     });
   }
 
@@ -114,8 +124,11 @@ export class PermissionsComponent implements OnInit {
         access_level: r.access_level,
       })),
     }).subscribe({
-      next: () => this.loadPermissions(),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar'),
+      next: () => {
+        this.loadPermissions();
+        this.savedPopup = true;
+      },
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar')),
     });
   }
 }

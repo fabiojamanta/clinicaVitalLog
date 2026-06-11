@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -147,7 +148,7 @@ export class SuppliersComponent implements OnInit {
         this.closeModal();
         this.load();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar fornecedor'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar fornecedor')),
     });
   }
 }

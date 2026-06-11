@@ -1,4 +1,5 @@
-import { Component, OnInit, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+﻿import { Component, OnInit, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -6,6 +7,8 @@ import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
+import { clientOptionLabel } from '../../core/search-select.util';
 
 const WRITE_OFF_CLIENT_NAME = 'Baixa de estoque / Descarte';
 
@@ -24,7 +27,7 @@ type EntryLookup = {
 @Component({
   selector: 'app-exits',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent, SearchSelectComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Saídas de estoque</h1><p>Controle de retirada por cliente, produto e lote.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
@@ -44,11 +47,31 @@ type EntryLookup = {
     @if(writeOffMode){<div class="hint">Exibe somente produtos e lotes vencidos com saldo. Motivo obrigatório.</div>}
   </div>
   }
-  <div><label>Produto</label><select [(ngModel)]="form.product_id" (ngModelChange)="onProductChange($event)"><option [ngValue]="0">Selecione</option>@for(p of productsForSelect;track p.id){<option [ngValue]="p.id">{{p.name}}</option>}</select></div>
+  <div>
+    <app-search-select
+      fieldLabel="Produto"
+      searchPath="/products"
+      placeholder="Digite o nome do produto"
+      [(ngModel)]="form.product_id"
+      [initialLabel]="productInitialLabel"
+      [resultFilter]="productResultFilter"
+      (ngModelChange)="onProductChange($event)"
+    ></app-search-select>
+  </div>
   <div><label>Lote</label><select [(ngModel)]="form.lot_id" (ngModelChange)="onLotChange()"><option [ngValue]="0">Selecione</option>@for(l of filteredLots;track l.id){<option [ngValue]="l.id">Lote {{l.lot_number}} · val {{l.expiration_date | dateBr}}@if(l.expired){ (vencido)}</option>}</select></div>
   <div><label>Saldo</label><input type="number" [ngModel]="selectedLotStock" readonly tabindex="-1"></div>
   <div><label>Data Saída</label><input type="date" [(ngModel)]="form.exit_date"></div>
-  <div><label>Cliente</label><select [(ngModel)]="form.client_id"><option [ngValue]="0">Selecione</option>@for(c of clients;track c.id){<option [ngValue]="c.id">{{c.name}} · {{c.client_type}}</option>}</select></div>
+  <div>
+    <app-search-select
+      fieldLabel="Cliente"
+      searchPath="/clients"
+      placeholder="Digite o nome do cliente"
+      [(ngModel)]="form.client_id"
+      [initialLabel]="clientInitialLabel"
+      [labelFn]="clientOptionLabel"
+      [disabled]="writeOffMode"
+    ></app-search-select>
+  </div>
   <div><label>Quantidade</label><input type="number" [(ngModel)]="form.quantity"></div>
   <div><label>Motivo</label><input [(ngModel)]="form.reason" [placeholder]="writeOffMode ? 'Obrigatório para baixa' : ''"></div>
   <div class="form-actions"><button type="button" class="btn" (click)="save()">Salvar</button></div>
@@ -84,17 +107,24 @@ type EntryLookup = {
 </div>`,
 })
 export class ExitsComponent implements OnInit, AfterViewInit {
+  readonly clientOptionLabel = clientOptionLabel;
   @ViewChild('entryCodeInput') entryCodeInput?: ElementRef<HTMLInputElement>;
   rows: any[] = [];
   allProducts: any[] = [];
   productsForSelect: any[] = [];
-  clients: any[] = [];
   lots: any[] = [];
   error = '';
   entryCode = '';
   selectedEntry: EntryLookup | null = null;
   expiredOnly: 'nao' | 'sim' = 'nao';
   writeOffClientId = 0;
+  productInitialLabel = '';
+  clientInitialLabel = '';
+
+  productResultFilter = (item: Record<string, unknown>) => {
+    if (!this.writeOffMode) return true;
+    return this.lots.some((l) => l.product_id === item['id']);
+  };
 
   get writeOffMode() {
     return this.expiredOnly === 'sim';
@@ -180,12 +210,12 @@ export class ExitsComponent implements OnInit, AfterViewInit {
       this.allProducts = r;
       this.syncProductsForSelect();
     });
-    this.api.get<any[]>('/clients').subscribe((r) => {
-      this.clients = r;
+    this.api.get<any[]>('/clients', { q: 'Baixa' }).subscribe((r) => {
       const wo = r.find((c) => c.name === WRITE_OFF_CLIENT_NAME);
       this.writeOffClientId = wo?.id || 0;
       if (this.writeOffMode && this.writeOffClientId) {
         this.form.client_id = this.writeOffClientId;
+        this.clientInitialLabel = WRITE_OFF_CLIENT_NAME;
       }
     });
     this.loadLots();
@@ -196,11 +226,14 @@ export class ExitsComponent implements OnInit, AfterViewInit {
     this.form.exit_type = this.writeOffMode ? 'baixa_vencido' : 'consumo';
     this.form.product_id = 0;
     this.form.lot_id = 0;
+    this.productInitialLabel = '';
     this.entryCode = '';
     if (this.writeOffMode && this.writeOffClientId) {
       this.form.client_id = this.writeOffClientId;
+      this.clientInitialLabel = WRITE_OFF_CLIENT_NAME;
     } else if (!this.writeOffMode) {
       this.form.client_id = 0;
+      this.clientInitialLabel = '';
     }
     this.loadLots();
   }
@@ -210,6 +243,7 @@ export class ExitsComponent implements OnInit, AfterViewInit {
     this.syncProductsForSelect();
     this.form.product_id = entry.product_id;
     this.form.lot_id = entry.lot_id;
+    this.productInitialLabel = entry.product_name;
     this.ensureValidSelection();
   }
 
@@ -218,6 +252,7 @@ export class ExitsComponent implements OnInit, AfterViewInit {
     this.form.exit_type = 'baixa_vencido';
     if (this.writeOffClientId) {
       this.form.client_id = this.writeOffClientId;
+      this.clientInitialLabel = WRITE_OFF_CLIENT_NAME;
     }
   }
 
@@ -244,6 +279,7 @@ export class ExitsComponent implements OnInit, AfterViewInit {
         }
         this.form.product_id = entry.product_id;
         this.form.lot_id = entry.lot_id;
+        this.productInitialLabel = entry.product_name;
         if (this.expiredOnly === 'sim' && !this.filteredLots.some((l) => l.id === entry.lot_id)) {
           this.expiredOnly = 'nao';
           this.form.exit_type = 'consumo';
@@ -255,7 +291,7 @@ export class ExitsComponent implements OnInit, AfterViewInit {
       },
       error: (e) => {
         this.selectedEntry = null;
-        this.error = e.error?.detail || 'Código de entrada não encontrado';
+        this.error = formatApiError(e.error?.detail, 'Código de entrada não encontrado');
       },
     });
   }
@@ -264,6 +300,7 @@ export class ExitsComponent implements OnInit, AfterViewInit {
     this.form.lot_id = 0;
     this.selectedEntry = null;
     this.entryCode = '';
+    if (!_id) this.productInitialLabel = '';
   }
 
   onLotChange() {
@@ -297,9 +334,11 @@ export class ExitsComponent implements OnInit, AfterViewInit {
         };
         this.entryCode = '';
         this.selectedEntry = null;
+        this.productInitialLabel = '';
+        if (!this.writeOffMode) this.clientInitialLabel = '';
         this.loadAll();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao registrar saída'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao registrar saída')),
     });
   }
 
@@ -310,7 +349,7 @@ export class ExitsComponent implements OnInit, AfterViewInit {
     if (!cancel_reason) return;
     this.api.post(`/exits/${id}/cancel`, { cancel_reason }).subscribe({
       next: () => this.loadAll(),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao cancelar'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao cancelar')),
     });
   }
 }

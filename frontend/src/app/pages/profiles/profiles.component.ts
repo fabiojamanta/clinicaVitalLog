@@ -1,9 +1,11 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { FormModalComponent } from '../../shared/form-modal.component';
+import { SuccessDialogComponent } from '../../shared/success-dialog.component';
 
 type Profile = {
   id: number;
@@ -19,7 +21,7 @@ type Profile = {
 @Component({
   selector: 'app-profiles',
   standalone: true,
-  imports: [CommonModule, FormsModule, FormModalComponent],
+  imports: [CommonModule, FormsModule, FormModalComponent, SuccessDialogComponent],
   template: `
 <div class="top">
   <div class="page-head">
@@ -66,6 +68,13 @@ type Profile = {
   </div>
 </app-form-modal>
 }
+
+<app-success-dialog
+  [open]="savedPopup"
+  title="Salvo"
+  message="Perfil salvo com sucesso."
+  (close)="savedPopup = false"
+></app-success-dialog>
 
 <div class="card table-wrap">
   <table>
@@ -114,6 +123,7 @@ export class ProfilesComponent implements OnInit {
   rows: Profile[] = [];
   editing: Profile | null = null;
   modalOpen = false;
+  savedPopup = false;
   error = '';
   form = { name: '', slug: '', clinical_slug: null as string | null, active: true };
 
@@ -143,7 +153,7 @@ export class ProfilesComponent implements OnInit {
   load() {
     this.api.get<Profile[]>('/profiles').subscribe({
       next: (r) => (this.rows = r),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar perfis'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar perfis')),
     });
   }
 
@@ -198,8 +208,9 @@ export class ProfilesComponent implements OnInit {
       next: () => {
         this.closeModal();
         this.load();
+        this.savedPopup = true;
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar perfil'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar perfil')),
     });
   }
 
@@ -208,7 +219,7 @@ export class ProfilesComponent implements OnInit {
     if (!confirm(`Excluir perfil ${p.name}?`)) return;
     this.api.delete(`/profiles/${p.id}`).subscribe({
       next: () => this.load(),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao excluir perfil'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao excluir perfil')),
     });
   }
 }

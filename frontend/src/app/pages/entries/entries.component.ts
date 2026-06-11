@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -6,11 +7,12 @@ import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
 
 @Component({
   selector: 'app-entries',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent, SearchSelectComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Entradas de estoque</h1><p>Registre entrada de produto informando lote e validade.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
@@ -21,7 +23,15 @@ import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component'
 </div>}
 @if(auth.canCreateEntry()){
 <div class="card grid grid-3">
-  <div><label>Produto</label><select [(ngModel)]="form.product_id"><option [ngValue]="0">Selecione</option>@for(p of products;track p.id){<option [ngValue]="p.id">{{p.name}}</option>}</select>
+  <div>
+    <app-search-select
+      fieldLabel="Produto"
+      searchPath="/products"
+      placeholder="Digite o nome do produto"
+      [(ngModel)]="form.product_id"
+      (itemSelected)="onProductSelected($event)"
+      (ngModelChange)="onProductIdChange($event)"
+    ></app-search-select>
     @if(form.product_id && selectedProduct){
       @if(!selectedProduct.supplier_id){<div class="hint danger">Produto sem fornecedor. Vá em Produtos e selecione o fornecedor antes de registrar entrada.</div>}
       @else{<div class="hint">Fornecedor do produto: <b>{{selectedProduct.supplier_name}}</b></div>}
@@ -66,7 +76,7 @@ import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component'
 })
 export class EntriesComponent implements OnInit {
   rows: any[] = [];
-  products: any[] = [];
+  selectedProduct: any = null;
   error = '';
   success = '';
   lastEntryId: number | null = null;
@@ -84,13 +94,16 @@ export class EntriesComponent implements OnInit {
     public auth: AuthService,
   ) {}
 
-  get selectedProduct() {
-    return this.products.find((p) => p.id === this.form.product_id);
-  }
-
   ngOnInit() {
     this.load();
-    this.api.get<any[]>('/products').subscribe((r) => (this.products = r));
+  }
+
+  onProductSelected(product: Record<string, unknown>) {
+    this.selectedProduct = product;
+  }
+
+  onProductIdChange(id: number | null) {
+    if (!id) this.selectedProduct = null;
   }
 
   load() {
@@ -117,7 +130,7 @@ export class EntriesComponent implements OnInit {
     this.error = '';
     this.api.post(`/entries/${id}/cancel`, { cancel_reason: cancel_reason.trim() }).subscribe({
       next: () => this.load(),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao cancelar entrada'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao cancelar entrada')),
     });
   }
 
@@ -138,9 +151,10 @@ export class EntriesComponent implements OnInit {
           quantity: 1,
           notes: '',
         };
+        this.selectedProduct = null;
         this.load();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao registrar entrada'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao registrar entrada')),
     });
   }
 }

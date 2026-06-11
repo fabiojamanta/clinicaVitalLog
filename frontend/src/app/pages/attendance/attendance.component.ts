@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -8,6 +9,8 @@ import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
 import { VitalsChartComponent, VitalSignPoint } from '../../shared/vitals-chart.component';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
+import { patientSearchParams } from '../../core/search-select.util';
 
 type TreatmentSessionItem = {
   id: number;
@@ -107,7 +110,7 @@ type Attendance = {
 @Component({
   selector: 'app-attendance',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, VitalsChartComponent, ReadonlyBannerComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, VitalsChartComponent, ReadonlyBannerComponent, SearchSelectComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Atendimento ao paciente</h1><p>Fluxo: sinais vitais → consulta médica → sessões de tratamento.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
@@ -115,11 +118,15 @@ type Attendance = {
 
 <div class="card grid grid-3">
   <div>
-    <label>Paciente</label>
-    <select [(ngModel)]="selectedPatientId" (ngModelChange)="onPatientChange()">
-      <option [ngValue]="0">Selecione</option>
-      @for(p of patients;track p.id){<option [ngValue]="p.id">{{p.name}}</option>}
-    </select>
+    <app-search-select
+      fieldLabel="Paciente"
+      searchPath="/clients"
+      [queryParams]="patientSearchParams"
+      placeholder="Digite o nome do paciente"
+      [(ngModel)]="selectedPatientId"
+      [initialLabel]="selectedPatientLabel"
+      (ngModelChange)="onPatientChange()"
+    ></app-search-select>
   </div>
   <div>
     <label>Data do atendimento</label>
@@ -286,7 +293,15 @@ type Attendance = {
 <div class="card">
   <h3>Dispensar medicamento</h3>
   <div class="grid grid-3">
-    <div><label>Produto</label><select [(ngModel)]="dispense.product_id" (ngModelChange)="onDispenseProductChange()"><option [ngValue]="0">Selecione</option>@for(p of products;track p.id){<option [ngValue]="p.id">{{p.name}}</option>}</select></div>
+    <div>
+      <app-search-select
+        fieldLabel="Produto"
+        searchPath="/products"
+        placeholder="Digite o nome do produto"
+        [(ngModel)]="dispense.product_id"
+        (ngModelChange)="onDispenseProductChange()"
+      ></app-search-select>
+    </div>
     <div><label>Lote</label><select [(ngModel)]="dispense.lot_id"><option [ngValue]="0">Selecione</option>@for(l of filteredLots;track l.id){<option [ngValue]="l.id">Lote {{l.lot_number}} · val {{l.expiration_date | dateBr}}</option>}</select></div>
     <div><label>Saldo</label><input type="number" [ngModel]="selectedLotStock" readonly tabindex="-1"></div>
     <div><label>Quantidade</label><input type="number" [(ngModel)]="dispense.quantity"></div>
@@ -338,14 +353,14 @@ type Attendance = {
   `],
 })
 export class AttendanceComponent implements OnInit {
-  patients: any[] = [];
-  products: any[] = [];
+  readonly patientSearchParams = patientSearchParams;
   lots: any[] = [];
   history: AttendanceListItem[] = [];
   current: Attendance | null = null;
   error = '';
 
   selectedPatientId = 0;
+  selectedPatientLabel = '';
   newDate = todayIsoBr();
 
   doctorNotes = '';
@@ -382,14 +397,10 @@ export class AttendanceComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.api.get<any[]>('/clients').subscribe((r) => {
-      this.patients = r.filter((c) => c.client_type === 'paciente' && c.active);
-      const attendanceId = Number(this.route.snapshot.queryParamMap.get('attendanceId'));
-      if (attendanceId) {
-        this.loadAttendance(attendanceId, true);
-      }
-    });
-    this.api.get<any[]>('/products').subscribe((r) => (this.products = r));
+    const attendanceId = Number(this.route.snapshot.queryParamMap.get('attendanceId'));
+    if (attendanceId) {
+      this.loadAttendance(attendanceId, true);
+    }
     this.api.get<any[]>('/lots').subscribe((r) => (this.lots = r));
   }
 
@@ -437,7 +448,7 @@ export class AttendanceComponent implements OnInit {
           this.setCurrent(a);
           this.loadHistory();
         },
-        error: (e) => (this.error = e.error?.detail || 'Erro ao abrir atendimento'),
+        error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao abrir atendimento')),
       });
   }
 
@@ -445,13 +456,14 @@ export class AttendanceComponent implements OnInit {
     this.error = '';
     this.api.get<Attendance>(`/attendances/${id}`).subscribe({
       next: (a) => {
+        this.selectedPatientId = a.patient_id;
+        this.selectedPatientLabel = a.patient_name;
         if (fromDeepLink) {
-          this.selectedPatientId = a.patient_id;
           this.loadHistory();
         }
         this.setCurrent(a);
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar atendimento'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar atendimento')),
     });
   }
 
@@ -483,7 +495,7 @@ export class AttendanceComponent implements OnInit {
     this.error = '';
     this.api.put<Attendance>(`/attendances/${this.current.id}/vitals`, this.vitals).subscribe({
       next: (a) => this.setCurrent(a),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar sinais vitais'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar sinais vitais')),
     });
   }
 
@@ -494,7 +506,7 @@ export class AttendanceComponent implements OnInit {
         this.vitalsHistory = r;
         this.vitalsChartOpen = true;
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar histórico'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar histórico')),
     });
   }
 
@@ -530,7 +542,7 @@ export class AttendanceComponent implements OnInit {
         this.newTreatment = { medications: '', total_sessions: 1, notes: '' };
         this.loadTreatments();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao criar tratamento'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao criar tratamento')),
     });
   }
 
@@ -607,7 +619,7 @@ export class AttendanceComponent implements OnInit {
     }
     this.api.put<Attendance>(`/attendances/${this.current.id}/${section}`, body).subscribe({
       next: (a) => this.setCurrent(a),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar anotações'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao salvar anotações')),
     });
   }
 
@@ -628,7 +640,7 @@ export class AttendanceComponent implements OnInit {
         this.api.get<any[]>('/lots').subscribe((r) => (this.lots = r));
         this.loadAttendance(this.current!.id);
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao dispensar medicamento'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao dispensar medicamento')),
     });
   }
 }

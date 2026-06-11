@@ -1,3 +1,4 @@
+﻿import { formatApiError } from '../core/api-error.util';
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
@@ -42,7 +43,7 @@ export class ApiService{
             blob.text().then((text) => {
               try {
                 const err = JSON.parse(text);
-                alert(err.detail || 'Não foi possível gerar o PDF');
+                alert(formatApiError(err.detail, 'Não foi possível gerar o PDF'));
               } catch {
                 alert('Não foi possível gerar o PDF');
               }
@@ -60,8 +61,7 @@ export class ApiService{
           setTimeout(() => URL.revokeObjectURL(url), 120000);
         },
         error: (e) => {
-          const detail = e.error?.detail;
-          alert(typeof detail === 'string' ? detail : 'Não foi possível gerar o PDF');
+          alert(formatApiError(e.error?.detail, 'Não foi possível gerar o PDF'));
         },
       });
   }

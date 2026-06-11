@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -7,6 +8,7 @@ import { DateBrPipe } from '../../core/date-br.pipe';
 import { CpfCnpjBrPipe } from '../../core/cpf-cnpj.pipe';
 import { PhoneBrPipe } from '../../core/phone-br.pipe';
 import { PageHeaderComponent } from '../../shared/page-header.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
 import { PAGE_LOGOS } from '../../shared/page-logos';
 import { SkeletonTableComponent } from '../../shared/skeleton-table.component';
 
@@ -192,7 +194,7 @@ const REPORTS: Record<string, ReportConfig> = {
 @Component({
   selector: 'app-report-view',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, DateBrPipe, CpfCnpjBrPipe, PhoneBrPipe, PageHeaderComponent],
+  imports: [CommonModule, FormsModule, RouterLink, DateBrPipe, CpfCnpjBrPipe, PhoneBrPipe, PageHeaderComponent, SearchSelectComponent],
   template: `
 @if(config){
   <app-page-header
@@ -214,13 +216,12 @@ const REPORTS: Record<string, ReportConfig> = {
     <div class="grid grid-3">
       @if(showProductFilter()){
         <div>
-          <label>Produto</label>
-          <select [(ngModel)]="filters.product_id">
-            <option [ngValue]="0">Todos</option>
-            @for (p of products; track p.id) {
-              <option [ngValue]="p.id">{{ p.name }}</option>
-            }
-          </select>
+          <app-search-select
+            fieldLabel="Produto"
+            searchPath="/products"
+            placeholder="Digite para filtrar ou deixe vazio para todos"
+            [(ngModel)]="filters.product_id"
+          ></app-search-select>
         </div>
       }
       @if(config.kind === 'estoque-atual'){
@@ -263,13 +264,12 @@ const REPORTS: Record<string, ReportConfig> = {
       }
       @if(config.kind === 'saidas'){
         <div>
-          <label>Cliente</label>
-          <select [(ngModel)]="filters.client_id">
-            <option [ngValue]="0">Todos</option>
-            @for (c of clients; track c.id) {
-              <option [ngValue]="c.id">{{ c.name }}</option>
-            }
-          </select>
+          <app-search-select
+            fieldLabel="Cliente"
+            searchPath="/clients"
+            placeholder="Digite para filtrar ou deixe vazio para todos"
+            [(ngModel)]="filters.client_id"
+          ></app-search-select>
         </div>
         <div>
           <label>Período — de</label>
@@ -298,13 +298,12 @@ const REPORTS: Record<string, ReportConfig> = {
       }
       @if(config.kind === 'fornecedores'){
         <div>
-          <label>Fornecedor</label>
-          <select [(ngModel)]="filters.supplier_id">
-            <option [ngValue]="0">Todos</option>
-            @for (s of suppliers; track s.id) {
-              <option [ngValue]="s.id">{{ s.name }}</option>
-            }
-          </select>
+          <app-search-select
+            fieldLabel="Fornecedor"
+            searchPath="/suppliers"
+            placeholder="Digite para filtrar ou deixe vazio para todos"
+            [(ngModel)]="filters.supplier_id"
+          ></app-search-select>
         </div>
         <div>
           <label>Situação</label>
@@ -317,13 +316,12 @@ const REPORTS: Record<string, ReportConfig> = {
       }
       @if(config.kind === 'clientes'){
         <div>
-          <label>Cliente</label>
-          <select [(ngModel)]="filters.client_id">
-            <option [ngValue]="0">Todos</option>
-            @for (c of clients; track c.id) {
-              <option [ngValue]="c.id">{{ c.name }}</option>
-            }
-          </select>
+          <app-search-select
+            fieldLabel="Cliente"
+            searchPath="/clients"
+            placeholder="Digite para filtrar ou deixe vazio para todos"
+            [(ngModel)]="filters.client_id"
+          ></app-search-select>
         </div>
         <div>
           <label>Tipo</label>
@@ -345,13 +343,12 @@ const REPORTS: Record<string, ReportConfig> = {
       }
       @if(config.kind === 'produtos'){
         <div>
-          <label>Produto</label>
-          <select [(ngModel)]="filters.product_id">
-            <option [ngValue]="0">Todos</option>
-            @for (p of products; track p.id) {
-              <option [ngValue]="p.id">{{ p.name }}</option>
-            }
-          </select>
+          <app-search-select
+            fieldLabel="Produto"
+            searchPath="/products"
+            placeholder="Digite para filtrar ou deixe vazio para todos"
+            [(ngModel)]="filters.product_id"
+          ></app-search-select>
         </div>
         <div>
           <label>Tipo de produto</label>
@@ -363,13 +360,12 @@ const REPORTS: Record<string, ReportConfig> = {
           </select>
         </div>
         <div>
-          <label>Fornecedor</label>
-          <select [(ngModel)]="filters.supplier_id">
-            <option [ngValue]="0">Todos</option>
-            @for (s of suppliers; track s.id) {
-              <option [ngValue]="s.id">{{ s.name }}</option>
-            }
-          </select>
+          <app-search-select
+            fieldLabel="Fornecedor"
+            searchPath="/suppliers"
+            placeholder="Digite para filtrar ou deixe vazio para todos"
+            [(ngModel)]="filters.supplier_id"
+          ></app-search-select>
         </div>
         <div>
           <label>Status do estoque</label>
@@ -440,9 +436,6 @@ const REPORTS: Record<string, ReportConfig> = {
 export class ReportViewComponent implements OnInit {
   config: ReportConfig | null = null;
   rows: Record<string, unknown>[] = [];
-  products: { id: number; name: string }[] = [];
-  clients: { id: number; name: string }[] = [];
-  suppliers: { id: number; name: string }[] = [];
   productTypes = PRODUCT_TYPES;
   clientTypes = CLIENT_TYPES;
   activeOptions = ACTIVE_OPTIONS;
@@ -477,21 +470,6 @@ export class ReportViewComponent implements OnInit {
     if (!this.config) {
       this.error = 'Relatório não encontrado';
       return;
-    }
-    if (this.showProductFilter() || this.config.kind === 'produtos') {
-      this.api.get<{ id: number; name: string }[]>('/products').subscribe({
-        next: (data) => (this.products = data),
-      });
-    }
-    if (this.config.kind === 'produtos' || this.config.kind === 'fornecedores') {
-      this.api.get<{ id: number; name: string }[]>('/suppliers').subscribe({
-        next: (data) => (this.suppliers = data),
-      });
-    }
-    if (this.config.kind === 'saidas' || this.config.kind === 'clientes') {
-      this.api.get<{ id: number; name: string }[]>('/clients').subscribe({
-        next: (data) => (this.clients = data),
-      });
     }
     this.load();
   }
@@ -575,7 +553,7 @@ export class ReportViewComponent implements OnInit {
         this.loading = false;
       },
       error: (e) => {
-        this.error = e.error?.detail || 'Erro ao carregar relatório';
+        this.error = formatApiError(e.error?.detail, 'Erro ao carregar relatório');
         this.loading = false;
       },
     });

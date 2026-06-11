@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+﻿import { Component } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -22,5 +23,5 @@ export class LoginComponent{
   password='admin123';
   error='';
   constructor(private auth:AuthService,private router:Router){}
-  login(){this.auth.login(this.email,this.password).subscribe({next:()=>this.router.navigateByUrl('/'),error:e=>this.error=e.error?.detail||'Erro ao entrar'})}
+  login(){this.auth.login(this.email,this.password).subscribe({next:()=>this.router.navigateByUrl('/'),error:e=>this.error=formatApiError(e.error?.detail,'Erro ao entrar')})}
 }

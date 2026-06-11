@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -7,6 +8,8 @@ import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
+import { patientSearchParams } from '../../core/search-select.util';
 
 type Payment = {
   id: number;
@@ -34,7 +37,7 @@ type Booking = {
 @Component({
   selector: 'app-bookings',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent, SearchSelectComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Reservas de consulta</h1><p>Registre reservas telefônicas com entrada de 30% e check-in com pagamento do saldo.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
@@ -43,11 +46,13 @@ type Booking = {
 @if(auth.canManageBookings()){
 <div class="card grid grid-3">
   <div>
-    <label>Paciente</label>
-    <select [(ngModel)]="form.patient_id">
-      <option [ngValue]="0">Selecione</option>
-      @for(p of patients; track p.id){<option [ngValue]="p.id">{{p.name}}</option>}
-    </select>
+    <app-search-select
+      fieldLabel="Paciente"
+      searchPath="/clients"
+      [queryParams]="patientSearchParams"
+      placeholder="Digite o nome do paciente"
+      [(ngModel)]="form.patient_id"
+    ></app-search-select>
   </div>
   <div>
     <label>Data prevista</label>
@@ -99,11 +104,14 @@ type Booking = {
     </select>
   </div>
   <div>
-    <label>Paciente</label>
-    <select [(ngModel)]="filterPatientId" (ngModelChange)="load()">
-      <option [ngValue]="0">Todos</option>
-      @for(p of patients; track p.id){<option [ngValue]="p.id">{{p.name}}</option>}
-    </select>
+    <app-search-select
+      fieldLabel="Paciente"
+      searchPath="/clients"
+      [queryParams]="patientSearchParams"
+      placeholder="Digite para filtrar ou deixe vazio para todos"
+      [(ngModel)]="filterPatientId"
+      (ngModelChange)="load()"
+    ></app-search-select>
   </div>
 </div>
 
@@ -170,7 +178,7 @@ type Booking = {
   `],
 })
 export class BookingsComponent implements OnInit {
-  patients: any[] = [];
+  readonly patientSearchParams = patientSearchParams;
   rows: Booking[] = [];
   error = '';
 
@@ -199,9 +207,6 @@ export class BookingsComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.api.get<any[]>('/clients').subscribe((r) => {
-      this.patients = r.filter((c) => c.client_type === 'paciente' && c.active);
-    });
     this.recalc();
     this.load();
   }
@@ -225,7 +230,7 @@ export class BookingsComponent implements OnInit {
     if (this.filterPatientId) params['patient_id'] = this.filterPatientId;
     this.api.get<Booking[]>('/bookings', params).subscribe({
       next: (r) => (this.rows = r),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar reservas'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar reservas')),
     });
   }
 
@@ -257,7 +262,7 @@ export class BookingsComponent implements OnInit {
         this.recalc();
         this.load();
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao criar reserva'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao criar reserva')),
     });
   }
 
@@ -281,7 +286,7 @@ export class BookingsComponent implements OnInit {
           this.router.navigate(['/atendimentos'], { queryParams: { attendanceId: b.attendance_id } });
         }
       },
-      error: (e) => (this.error = e.error?.detail || 'Erro no check-in'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro no check-in')),
     });
   }
 
@@ -289,7 +294,7 @@ export class BookingsComponent implements OnInit {
     if (!confirm(`Cancelar reserva de ${b.patient_name}?`)) return;
     this.api.post<Booking>(`/bookings/${b.id}/cancel`, {}).subscribe({
       next: () => this.load(),
-      error: (e) => (this.error = e.error?.detail || 'Erro ao cancelar'),
+      error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao cancelar')),
     });
   }
 

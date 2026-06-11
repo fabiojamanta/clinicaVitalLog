@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit } from '@angular/core';
+import { formatApiError } from '../../core/api-error.util';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -139,7 +140,7 @@ export class PublicSignComponent implements OnInit {
         this.loading = false;
       },
       error: (e) => {
-        this.fatalError = e.error?.detail || 'Link inválido, expirado ou já utilizado.';
+        this.fatalError = formatApiError(e.error?.detail, 'Link inválido, expirado ou já utilizado.');
         this.loading = false;
       },
     });
@@ -148,7 +149,7 @@ export class PublicSignComponent implements OnInit {
   loadDetails() {
     this.api.get<PublicSignInfo>(`/public/sign/${this.token}/details`).subscribe({
       next: (r) => { this.details = r; },
-      error: (e) => { this.error = e.error?.detail || 'Não foi possível carregar os detalhes.'; },
+      error: (e) => { this.error = formatApiError(e.error?.detail, 'Não foi possível carregar os detalhes.'); },
     });
   }
 
@@ -162,7 +163,7 @@ export class PublicSignComponent implements OnInit {
         this.submitting = false;
       },
       error: (e) => {
-        this.error = e.error?.detail || 'Erro ao registrar assinatura. Tente novamente.';
+        this.error = formatApiError(e.error?.detail, 'Erro ao registrar assinatura. Tente novamente.');
         this.submitting = false;
       },
     });
