@@ -111,7 +111,7 @@ type Booking = {
       placeholder="Digite 3 letras, selecione na lista"
       [(ngModel)]="filterPatientId"
       [filterMode]="true"
-      (ngModelChange)="load()"
+      (ngModelChange)="onPatientFilter($event)"
     ></app-search-select>
   </div>
 </div>
@@ -234,6 +234,11 @@ export class BookingsComponent implements OnInit {
       next: (r) => (this.rows = r),
       error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar reservas')),
     });
+  }
+
+  onPatientFilter(patientId: number) {
+    this.filterPatientId = patientId;
+    this.load();
   }
 
   createBooking() {

@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models import Supplier, Client, Product, Lot, User, Profile, AccessLevel
 from ..schemas import SupplierCreate, SupplierRead, ClientCreate, ClientRead, ProductCreate, ProductRead, LotRead, UserCreate, UserUpdate, UserRead
 from ..deps import get_current_user, log_action
-from ..permissions import require_menu_access, require_admin
+from ..permissions import require_menu_access, require_admin, assert_menu_access, assert_any_menu_access
 from ..security import get_password_hash, validate_password_strength
 from ..tenant import assert_supplier_in_clinic
 from datetime import date, timedelta
@@ -143,13 +143,22 @@ def update_user(
     obj.profile = profile
     return _user_to_read(obj)
 
+SUPPLIER_LOOKUP_MENUS = ("fornecedores", "produtos", "relatorios")
+CLIENT_LOOKUP_MENUS = ("clientes", "atendimentos", "atendimentos_pendentes", "reservas", "saidas", "relatorios")
+PRODUCT_LOOKUP_MENUS = ("produtos", "entradas", "saidas", "atendimentos", "relatorios")
+
+
 # Fornecedores
 @router.get("/suppliers", response_model=list[SupplierRead])
 def list_suppliers(
     q: Optional[str] = None,
     db: Session = Depends(get_db),
-    user: User = Depends(require_menu_access("fornecedores", AccessLevel.read)),
+    user: User = Depends(get_current_user),
 ):
+    if q and len(q.strip()) >= 3:
+        assert_any_menu_access(db, user, SUPPLIER_LOOKUP_MENUS, AccessLevel.read)
+    else:
+        assert_menu_access(db, user, "fornecedores", AccessLevel.read)
     query = db.query(Supplier).filter(Supplier.clinic_id == user.clinic_id)
     if q and len(q.strip()) >= 3:
         query = query.filter(Supplier.name.ilike(f"%{q.strip()}%")).order_by(Supplier.name).limit(50)
@@ -185,8 +194,12 @@ def list_clients(
     client_type: Optional[str] = None,
     active_only: bool = False,
     db: Session = Depends(get_db),
-    user: User = Depends(require_menu_access("clientes", AccessLevel.read)),
+    user: User = Depends(get_current_user),
 ):
+    if q and len(q.strip()) >= 3:
+        assert_any_menu_access(db, user, CLIENT_LOOKUP_MENUS, AccessLevel.read)
+    else:
+        assert_menu_access(db, user, "clientes", AccessLevel.read)
     query = db.query(Client).filter(Client.clinic_id == user.clinic_id)
     if client_type:
         query = query.filter(Client.client_type == client_type)
@@ -224,8 +237,12 @@ def update_client(id: int, payload: ClientCreate, request: Request, db: Session 
 def list_products(
     q: Optional[str] = None,
     db: Session = Depends(get_db),
-    user: User = Depends(require_menu_access("produtos", AccessLevel.read)),
+    user: User = Depends(get_current_user),
 ):
+    if q and len(q.strip()) >= 3:
+        assert_any_menu_access(db, user, PRODUCT_LOOKUP_MENUS, AccessLevel.read)
+    else:
+        assert_menu_access(db, user, "produtos", AccessLevel.read)
     query = db.query(Product).filter(Product.clinic_id == user.clinic_id)
     if q and len(q.strip()) >= 3:
         query = query.filter(Product.name.ilike(f"%{q.strip()}%")).order_by(Product.name).limit(50)

@@ -77,6 +77,33 @@ def require_menu_access(menu_key: str, min_level: AccessLevel):
     return checker
 
 
+def assert_menu_access(
+    db: Session,
+    user: User,
+    menu_key: str,
+    min_level: AccessLevel,
+) -> None:
+    if user_is_admin(user):
+        return
+    perms = get_user_permissions(db, user)
+    if not has_menu_access(perms, menu_key, min_level):
+        raise HTTPException(403, "Acesso negado")
+
+
+def assert_any_menu_access(
+    db: Session,
+    user: User,
+    menu_keys: tuple[str, ...],
+    min_level: AccessLevel,
+) -> None:
+    if user_is_admin(user):
+        return
+    perms = get_user_permissions(db, user)
+    if any(has_menu_access(perms, mk, min_level) for mk in menu_keys):
+        return
+    raise HTTPException(403, "Acesso negado")
+
+
 def require_clinical_slug(*slugs: str):
     def checker(user: User = Depends(get_current_user)):
         if user_is_admin(user):

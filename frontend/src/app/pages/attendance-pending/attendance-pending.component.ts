@@ -43,7 +43,7 @@ type PendingItem = {
       placeholder="Digite 3 letras, selecione na lista"
       [(ngModel)]="patientId"
       [filterMode]="true"
-      (ngModelChange)="load()"
+      (ngModelChange)="onPatientFilter($event)"
     ></app-search-select>
   </div>
 </div>
@@ -89,6 +89,11 @@ export class AttendancePendingComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.load();
+  }
+
+  onPatientFilter(patientId: number) {
+    this.patientId = patientId;
     this.load();
   }
 

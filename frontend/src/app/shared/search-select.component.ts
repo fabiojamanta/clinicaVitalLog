@@ -15,6 +15,7 @@ import {
   NG_VALUE_ACCESSOR,
 } from '@angular/forms';
 import { ApiService } from '../services/api.service';
+import { formatApiError } from '../core/api-error.util';
 
 @Component({
   selector: 'app-search-select',
@@ -51,6 +52,8 @@ import { ApiService } from '../services/api.service';
     <ul class="search-select-dropdown" role="listbox">
       @if (loading) {
         <li class="search-select-hint">Buscando...</li>
+      } @else if (searchError) {
+        <li class="search-select-hint search-select-error">{{ searchError }}</li>
       } @else if (query.trim().length < minChars) {
         <li class="search-select-hint">Digite pelo menos {{ minChars }} caracteres para buscar</li>
       } @else if (!results.length) {
@@ -97,7 +100,7 @@ import { ApiService } from '../services/api.service';
     }
     .search-select-dropdown {
       position: absolute;
-      z-index: 120;
+      z-index: 1000;
       left: 0;
       right: 0;
       top: calc(100% + 4px);
@@ -106,10 +109,12 @@ import { ApiService } from '../services/api.service';
       list-style: none;
       max-height: 240px;
       overflow-y: auto;
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--glass-surface-strong, #ffffff);
+      backdrop-filter: blur(var(--glass-blur, 18px));
+      -webkit-backdrop-filter: blur(var(--glass-blur, 18px));
+      border: 1px solid var(--line, rgba(255, 255, 255, 0.45));
       border-radius: 12px;
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--glass-shadow-lg, 0 16px 48px rgba(26, 29, 33, 0.12));
     }
     .search-select-hint {
       padding: 10px 14px;
@@ -117,12 +122,17 @@ import { ApiService } from '../services/api.service';
       font-size: 13px;
       cursor: default;
     }
+    .search-select-error {
+      color: var(--danger);
+    }
     .search-select-dropdown li[role='option'] {
       padding: 10px 14px;
       cursor: pointer;
+      color: var(--text);
+      font-weight: 500;
     }
     .search-select-dropdown li[role='option']:hover {
-      background: color-mix(in srgb, var(--primary) 10%, transparent);
+      background: color-mix(in srgb, var(--brand) 12%, var(--glass-surface-strong, #fff));
     }
     .search-select.disabled {
       opacity: 0.7;
@@ -161,6 +171,7 @@ export class SearchSelectComponent implements ControlValueAccessor {
   results: Record<string, unknown>[] = [];
   open = false;
   loading = false;
+  searchError = '';
   focused = false;
   selectedLabel = '';
   value: number | null = null;
@@ -239,9 +250,14 @@ export class SearchSelectComponent implements ControlValueAccessor {
     if (this.filterMode) {
       this.open = true;
       const q = this.query.trim();
+      if (!q.length && this.hasValue) {
+        this.clearFilterValue();
+        return;
+      }
       if (q.length < this.minChars) {
         this.results = [];
         this.loading = false;
+        this.searchError = '';
         return;
       }
       this.scheduleSearch(q);
@@ -266,10 +282,15 @@ export class SearchSelectComponent implements ControlValueAccessor {
   clear(event: Event) {
     event.preventDefault();
     event.stopPropagation();
+    this.clearFilterValue();
+  }
+
+  private clearFilterValue() {
     this.value = null;
     this.selectedLabel = '';
     this.query = '';
     this.results = [];
+    this.searchError = '';
     this.open = false;
     this.onChange(this.value ?? 0);
     this.onTouched();
@@ -291,6 +312,7 @@ export class SearchSelectComponent implements ControlValueAccessor {
   private scheduleSearch(q: string) {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.loading = true;
+    this.searchError = '';
     this.searchTimer = setTimeout(() => this.runSearch(q), 300);
   }
 
@@ -304,10 +326,12 @@ export class SearchSelectComponent implements ControlValueAccessor {
       next: (rows) => {
         this.results = this.resultFilter ? rows.filter(this.resultFilter) : rows;
         this.loading = false;
+        this.searchError = '';
       },
-      error: () => {
+      error: (err) => {
         this.results = [];
         this.loading = false;
+        this.searchError = formatApiError(err.error?.detail, 'Erro ao buscar');
       },
     });
   }

@@ -8,7 +8,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tmp_db}"
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
-from app.models import User, Profile  # noqa: E402
+from app.models import User, Profile, Client  # noqa: E402
 from app.security import get_password_hash  # noqa: E402
 
 client = TestClient(app)
@@ -33,6 +33,7 @@ db.add(User(
     clinic_id=1, profile_id=consulta_p.id, name="Consulta", email="consulta@test.com",
     password_hash=get_password_hash("teste123"), active=True,
 ))
+db.add(Client(clinic_id=1, name="Ana Paciente Teste", client_type="paciente", active=True))
 db.commit()
 db.close()
 
@@ -101,5 +102,34 @@ check(r.status_code == 403, "consulta POST clientes bloqueado")
 # admin bypass
 r = client.get("/users", headers=admin_h)
 check(r.status_code == 200, "admin bypass em usuários")
+
+# lookup de clientes com q= para perfis sem menu clientes
+db = SessionLocal()
+enfermeira_p = db.query(Profile).filter_by(slug="enfermeira").first()
+medico_p = db.query(Profile).filter_by(slug="medico").first()
+db.add(User(
+    clinic_id=1, profile_id=enfermeira_p.id, name="Enfermeira", email="enfermeira@test.com",
+    password_hash=get_password_hash("teste123"), active=True,
+))
+db.add(User(
+    clinic_id=1, profile_id=medico_p.id, name="Medico", email="medico@test.com",
+    password_hash=get_password_hash("teste123"), active=True,
+))
+db.commit()
+db.close()
+
+enfermeira_h, enfermeira_u = login("enfermeira@test.com")
+check(enfermeira_u["permissions"].get("clientes") in (None, "hidden"), "enfermeira sem clientes")
+r = client.get("/clients", headers=enfermeira_h)
+check(r.status_code == 403, "enfermeira não lista clientes sem q")
+r = client.get("/clients", headers=enfermeira_h, params={"q": "Ana", "client_type": "paciente"})
+check(r.status_code == 200 and len(r.json()) >= 1, "enfermeira busca paciente com q")
+
+medico_h, medico_u = login("medico@test.com")
+check(medico_u["permissions"].get("clientes") in (None, "hidden"), "medico sem clientes")
+r = client.get("/clients", headers=medico_h, params={"q": "Ana", "client_type": "paciente"})
+check(r.status_code == 200, "medico busca paciente com q")
+r = client.get("/products", headers=medico_h, params={"q": "Med"})
+check(r.status_code == 200, "medico busca produto com q")
 
 print("\nTodos os testes de permissões passaram.")
