@@ -81,10 +81,10 @@ export class AuthService {
       .post<any>(`${this.api.base}/auth/login`, { email, password }, { withCredentials: true })
       .pipe(
         tap((r) => {
-          sessionStorage.setItem('user', JSON.stringify(r.user));
-          this.profile = r.user.profile ?? null;
-          this.permissions = r.user.permissions ?? {};
-          this.sessionActive = true;
+          if (r.access_token) {
+            sessionStorage.setItem('access_token', r.access_token);
+          }
+          this.hydrateFromUser(r.user);
         }),
       );
   }
@@ -116,17 +116,13 @@ export class AuthService {
 
   logout() {
     return this.http.post(`${this.api.base}/auth/logout`, {}, { withCredentials: true }).pipe(
-      tap(() => {
-        sessionStorage.removeItem('user');
-        this.profile = null;
-        this.permissions = {};
-        this.sessionActive = false;
-      }),
+      tap(() => this.clearLocalSession()),
     );
   }
 
   clearLocalSession() {
     sessionStorage.removeItem('user');
+    sessionStorage.removeItem('access_token');
     this.profile = null;
     this.permissions = {};
     this.sessionActive = false;

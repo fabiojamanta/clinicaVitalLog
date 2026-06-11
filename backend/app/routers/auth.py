@@ -81,7 +81,7 @@ def refresh_session(request: Request, response: Response, db: Session = Depends(
     store_refresh_token(db, user.id, new_refresh)
     set_auth_cookies(response, access, new_refresh)
     db.commit()
-    return {"ok": True, "user": _user_payload(user, db)}
+    return {"ok": True, "access_token": access, "user": _user_payload(user, db)}
 
 
 @router.post("/logout")

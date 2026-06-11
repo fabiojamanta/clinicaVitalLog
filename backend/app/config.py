@@ -1,3 +1,5 @@
+import os
+
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
@@ -27,7 +29,9 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.ENV.lower() in ("production", "prod")
+        if self.ENV.lower() in ("production", "prod"):
+            return True
+        return os.environ.get("RENDER") == "true"
 
     def cors_origins_list(self) -> list[str]:
         raw = (self.CORS_ORIGINS or "*").strip()
