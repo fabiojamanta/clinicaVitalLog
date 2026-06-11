@@ -136,7 +136,7 @@ export class AppComponent implements OnDestroy {
   }
 
   isLoginPage() {
-    return this.router.url.startsWith('/login');
+    return this.router.url.startsWith('/login') || this.router.url.startsWith('/assinar');
   }
 
   trackEntry(_index: number, entry: NavMenuEntry): string {

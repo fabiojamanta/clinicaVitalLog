@@ -15,7 +15,14 @@ from ..schemas import (
     ExitRead,
 )
 from ..deps import get_current_user, require_roles, log_action
-from ..attendance_workflow import pending_items_for_role, workflow_status, has_dispensed
+from ..attendance_workflow import (
+    pending_items_for_role,
+    session_pending_items_for_role,
+    session_status,
+    workflow_status,
+    has_dispensed,
+)
+from ..models import Treatment, TreatmentSession
 from .stock import perform_stock_exit, _exit_to_read
 
 router = APIRouter(tags=["atendimentos"])
@@ -82,6 +89,7 @@ def list_attendances(
 
 @router.get("/attendances/pending", response_model=list[AttendancePendingItem])
 def list_pending_attendances(
+    patient_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -92,16 +100,14 @@ def list_pending_attendances(
     ):
         raise HTTPException(403, "Acesso negado")
 
-    rows = (
-        db.query(Attendance)
-        .filter(
-            Attendance.clinic_id == user.clinic_id,
-            Attendance.doctor_updated_at.isnot(None),
-            Attendance.nursing_updated_at.is_(None),
-        )
-        .order_by(Attendance.attendance_date.desc(), Attendance.doctor_updated_at.desc())
-        .all()
+    q = db.query(Attendance).filter(
+        Attendance.clinic_id == user.clinic_id,
+        Attendance.doctor_updated_at.isnot(None),
+        Attendance.nursing_updated_at.is_(None),
     )
+    if patient_id:
+        q = q.filter(Attendance.patient_id == patient_id)
+    rows = q.order_by(Attendance.attendance_date.desc(), Attendance.doctor_updated_at.desc()).all()
 
     result: list[AttendancePendingItem] = []
     for att in rows:
@@ -109,6 +115,7 @@ def list_pending_attendances(
             result.append(
                 AttendancePendingItem(
                     id=att.id,
+                    item_type="atendimento",
                     patient_id=att.patient_id,
                     patient_name=att.patient.name if att.patient else None,
                     attendance_date=att.attendance_date,
@@ -119,6 +126,50 @@ def list_pending_attendances(
                     doctor_user_name=att.doctor_user.name if att.doctor_user else None,
                     doctor_updated_at=att.doctor_updated_at,
                     has_dispensed=has_dispensed(att),
+                )
+            )
+
+    sq = (
+        db.query(TreatmentSession)
+        .join(Treatment)
+        .filter(
+            Treatment.clinic_id == user.clinic_id,
+            Treatment.active == True,
+            TreatmentSession.nursing_updated_at.is_(None),
+        )
+    )
+    if patient_id:
+        sq = sq.filter(Treatment.patient_id == patient_id)
+    sessions = sq.order_by(TreatmentSession.treatment_id, TreatmentSession.session_number).all()
+
+    # Mostra todas as sessões aguardando enfermagem, mas apenas a próxima
+    # sessão "pendente" de cada tratamento (as sessões são sequenciais).
+    seen_pending_treatment: set[int] = set()
+    for s in sessions:
+        t = s.treatment
+        if session_status(s) == "pendente":
+            if t.id in seen_pending_treatment:
+                continue
+            seen_pending_treatment.add(t.id)
+        for pending_for, pending_action in session_pending_items_for_role(s, user.role):
+            result.append(
+                AttendancePendingItem(
+                    id=t.attendance_id,
+                    item_type="sessao",
+                    patient_id=t.patient_id,
+                    patient_name=t.patient.name if t.patient else None,
+                    attendance_date=s.session_date
+                    or (t.attendance.attendance_date if t.attendance else t.created_at.date()),
+                    pending_for=pending_for,
+                    pending_action=pending_action,
+                    workflow_status=session_status(s),
+                    prescription=t.medications,
+                    doctor_user_name=t.doctor_user.name if t.doctor_user else None,
+                    doctor_updated_at=None,
+                    has_dispensed=any(e.status == MovementStatus.ativa for e in (s.exits or [])),
+                    session_id=s.id,
+                    session_number=s.session_number,
+                    total_sessions=t.total_sessions,
                 )
             )
     return result

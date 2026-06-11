@@ -299,6 +299,7 @@ def perform_stock_exit(
     reason: Optional[str] = None,
     notes: Optional[str] = None,
     attendance_id: Optional[int] = None,
+    treatment_session_id: Optional[int] = None,
     request: Optional[Request] = None,
 ) -> StockExit:
     """Valida lote, aplica a baixa no estoque e registra a saída (sem commit)."""
@@ -331,6 +332,7 @@ def perform_stock_exit(
         lot_id=lot_id,
         client_id=client_id,
         attendance_id=attendance_id,
+        treatment_session_id=treatment_session_id,
         exit_date=exit_date,
         quantity=quantity,
         exit_type=exit_type,
@@ -349,6 +351,7 @@ def perform_stock_exit(
             "lot_id_payload": lot_id,
             "client_id": client_id,
             "attendance_id": attendance_id,
+            "treatment_session_id": treatment_session_id,
             "exit_date": exit_date.isoformat(),
             "quantity": quantity,
             "exit_type": exit_type.value,

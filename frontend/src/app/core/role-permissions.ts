@@ -100,6 +100,7 @@ export function canAccessRoute(role: UserRole | null | undefined, path: string):
   if (p === '/saidas') return hasRole(role, ['estoque', 'operacional', 'enfermeira', 'tecnica_enfermagem']);
   if (p === '/atendimentos') return hasRole(role, ATTENDANCE_ROLES);
   if (p === '/atendimentos-pendentes') return hasRole(role, PENDING_ATTENDANCE_ROLES);
+  if (p.startsWith('/sessoes')) return hasRole(role, ATTENDANCE_ROLES);
   if (p === '/usuarios' || p === '/auditoria') return hasRole(role, ['administrador']);
   return true;
 }
@@ -178,6 +179,18 @@ export function canEditNursingSection(role: UserRole | null | undefined): boolea
 
 export function canDispenseMedication(role: UserRole | null | undefined): boolean {
   return hasRole(role, ['enfermeira', 'tecnica_enfermagem']);
+}
+
+export function canCreateTreatment(role: UserRole | null | undefined): boolean {
+  return hasRole(role, ['medico']);
+}
+
+export function canExecuteSession(role: UserRole | null | undefined): boolean {
+  return hasRole(role, ['enfermeira', 'tecnica_enfermagem']);
+}
+
+export function canFinalizeSession(role: UserRole | null | undefined): boolean {
+  return hasRole(role, ['enfermeira']);
 }
 
 export function canViewPendingAttendances(role: UserRole | null | undefined): boolean {

@@ -148,6 +148,7 @@ class StockExit(Base):
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=False)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     attendance_id = Column(Integer, ForeignKey("attendances.id"), nullable=True)
+    treatment_session_id = Column(Integer, ForeignKey("treatment_sessions.id"), nullable=True)
     exit_date = Column(Date, nullable=False)
     quantity = Column(Integer, nullable=False)
     reason = Column(String(255))
@@ -163,6 +164,7 @@ class StockExit(Base):
     client = relationship("Client")
     user = relationship("User")
     attendance = relationship("Attendance", back_populates="exits")
+    treatment_session = relationship("TreatmentSession", back_populates="exits")
 
 class Attendance(Base):
     __tablename__ = "attendances"
@@ -187,6 +189,49 @@ class Attendance(Base):
     tech_user = relationship("User", foreign_keys=[tech_user_id])
     nursing_user = relationship("User", foreign_keys=[nursing_user_id])
     exits = relationship("StockExit", back_populates="attendance")
+
+class Treatment(Base):
+    __tablename__ = "treatments"
+    id = Column(Integer, primary_key=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
+    attendance_id = Column(Integer, ForeignKey("attendances.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    medications = Column(Text, nullable=False)
+    total_sessions = Column(Integer, nullable=False)
+    notes = Column(Text)
+    doctor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    attendance = relationship("Attendance")
+    patient = relationship("Client", foreign_keys=[patient_id])
+    doctor_user = relationship("User", foreign_keys=[doctor_user_id])
+    sessions = relationship(
+        "TreatmentSession",
+        back_populates="treatment",
+        order_by="TreatmentSession.session_number",
+    )
+
+class TreatmentSession(Base):
+    __tablename__ = "treatment_sessions"
+    id = Column(Integer, primary_key=True)
+    treatment_id = Column(Integer, ForeignKey("treatments.id"), nullable=False)
+    session_number = Column(Integer, nullable=False)
+    session_date = Column(Date, nullable=True)
+    tech_notes = Column(Text)
+    tech_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    tech_updated_at = Column(DateTime, nullable=True)
+    nursing_notes = Column(Text)
+    nursing_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    nursing_updated_at = Column(DateTime, nullable=True)
+    patient_signature = Column(Text, nullable=True)
+    signed_at = Column(DateTime, nullable=True)
+    signature_token = Column(String(80), nullable=True, index=True)
+    signature_token_expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    treatment = relationship("Treatment", back_populates="sessions")
+    tech_user = relationship("User", foreign_keys=[tech_user_id])
+    nursing_user = relationship("User", foreign_keys=[nursing_user_id])
+    exits = relationship("StockExit", back_populates="treatment_session")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

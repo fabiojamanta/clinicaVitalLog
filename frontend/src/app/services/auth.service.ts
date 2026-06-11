@@ -26,6 +26,9 @@ import {
   canEditTechSection,
   canEditNursingSection,
   canDispenseMedication,
+  canCreateTreatment,
+  canExecuteSession,
+  canFinalizeSession,
   canViewPendingAttendances,
   isReadOnlyCadastro,
   roleLabel,
@@ -163,6 +166,18 @@ export class AuthService {
 
   canDispenseMedication() {
     return canDispenseMedication(this.role());
+  }
+
+  canCreateTreatment() {
+    return canCreateTreatment(this.role());
+  }
+
+  canExecuteSession() {
+    return canExecuteSession(this.role());
+  }
+
+  canFinalizeSession() {
+    return canFinalizeSession(this.role());
   }
 
   canViewPendingAttendances() {

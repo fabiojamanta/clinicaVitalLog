@@ -54,7 +54,7 @@ export const NAV_MENU: NavMenuEntry[] = [
     label: 'Atendimentos',
     children: [
       { label: 'Consulta', route: '/atendimentos', menuItem: 'atendimentos' },
-      { label: 'Pendentes', route: '/atendimentos-pendentes', menuItem: 'atendimentos_pendentes' },
+      { label: 'Pendências', route: '/atendimentos-pendentes', menuItem: 'atendimentos_pendentes' },
     ],
   },
 ];

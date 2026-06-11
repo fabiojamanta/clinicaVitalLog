@@ -218,6 +218,7 @@ class AttendanceRead(BaseModel):
 
 class AttendancePendingItem(BaseModel):
     id: int
+    item_type: str = "atendimento"
     patient_id: int
     patient_name: Optional[str] = None
     attendance_date: date
@@ -228,10 +229,105 @@ class AttendancePendingItem(BaseModel):
     doctor_user_name: Optional[str] = None
     doctor_updated_at: Optional[datetime] = None
     has_dispensed: bool = False
+    session_id: Optional[int] = None
+    session_number: Optional[int] = None
+    total_sessions: Optional[int] = None
 
     @field_serializer('doctor_updated_at')
     def serialize_doctor_updated_at(self, value: datetime | None) -> str | None:
         return format_datetime_br_iso(value)
+
+class TreatmentCreate(BaseModel):
+    medications: str
+    total_sessions: int
+    notes: Optional[str] = None
+
+class TreatmentSessionListItem(BaseModel):
+    id: int
+    session_number: int
+    session_date: Optional[date] = None
+    status: str
+    signed: bool = False
+
+class TreatmentRead(BaseModel):
+    id: int
+    attendance_id: int
+    patient_id: int
+    patient_name: Optional[str] = None
+    medications: str
+    total_sessions: int
+    notes: Optional[str] = None
+    doctor_user_id: Optional[int] = None
+    doctor_user_name: Optional[str] = None
+    active: bool = True
+    created_at: Optional[datetime] = None
+    sessions_done: int = 0
+    sessions: list[TreatmentSessionListItem] = []
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, value: datetime | None) -> str | None:
+        return format_datetime_br_iso(value)
+
+class TreatmentSessionRead(BaseModel):
+    id: int
+    treatment_id: int
+    session_number: int
+    total_sessions: int
+    patient_id: int
+    patient_name: Optional[str] = None
+    patient_phone: Optional[str] = None
+    medications: str
+    treatment_notes: Optional[str] = None
+    doctor_user_name: Optional[str] = None
+    session_date: Optional[date] = None
+    tech_notes: Optional[str] = None
+    tech_user_id: Optional[int] = None
+    tech_user_name: Optional[str] = None
+    tech_updated_at: Optional[datetime] = None
+    nursing_notes: Optional[str] = None
+    nursing_user_id: Optional[int] = None
+    nursing_user_name: Optional[str] = None
+    nursing_updated_at: Optional[datetime] = None
+    patient_signature: Optional[str] = None
+    signed_at: Optional[datetime] = None
+    status: str
+    exits: list[ExitRead] = []
+
+    @field_serializer('tech_updated_at', 'nursing_updated_at', 'signed_at')
+    def serialize_session_datetimes(self, value: datetime | None) -> str | None:
+        return format_datetime_br_iso(value)
+
+class TreatmentSessionSectionUpdate(BaseModel):
+    session_date: Optional[date] = None
+    notes: Optional[str] = None
+
+class SessionSignatureCreate(BaseModel):
+    signature: str
+
+class SignatureLinkRead(BaseModel):
+    token: str
+    expires_at: datetime
+
+    @field_serializer('expires_at')
+    def serialize_expires_at(self, value: datetime) -> str | None:
+        return format_datetime_br_iso(value)
+
+class PublicSignExitItem(BaseModel):
+    product_name: str
+    quantity: int
+    unit: Optional[str] = None
+
+class PublicSignInfo(BaseModel):
+    patient_name: str
+    session_number: int
+    total_sessions: int
+    session_date: Optional[date] = None
+    medications: str
+    comments: Optional[str] = None
+    exits: list[PublicSignExitItem] = []
+
+class PublicSignCreate(BaseModel):
+    signature: str
 
 class AuditRead(BaseModel):
     id: int

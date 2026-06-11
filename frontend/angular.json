@@ -20,6 +20,7 @@
               { "glob": "_redirects", "input": "src", "output": "/" }
             ],
           "styles": ["src/styles.css"],
+          "allowedCommonJsDependencies": ["qrcode"],
           "optimization": {
             "fonts": {
               "inline": false

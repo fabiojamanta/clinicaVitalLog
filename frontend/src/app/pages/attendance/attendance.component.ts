@@ -1,11 +1,32 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
+
+type TreatmentSessionItem = {
+  id: number;
+  session_number: number;
+  session_date?: string;
+  status: string;
+  signed: boolean;
+};
+
+type Treatment = {
+  id: number;
+  attendance_id: number;
+  patient_id: number;
+  medications: string;
+  total_sessions: number;
+  notes?: string;
+  doctor_user_name?: string;
+  created_at?: string;
+  sessions_done: number;
+  sessions: TreatmentSessionItem[];
+};
 
 type AttendanceListItem = {
   id: number;
@@ -127,6 +148,48 @@ type Attendance = {
   }
 </div>
 
+@if(auth.canCreateTreatment()){
+<div class="card section-card">
+  <h3>Criar tratamento com sessões</h3>
+  <div class="grid grid-3">
+    <div>
+      <label>Número de sessões</label>
+      <input type="number" min="1" max="100" [(ngModel)]="newTreatment.total_sessions">
+    </div>
+  </div>
+  <label>Medicamentos do tratamento</label>
+  <textarea rows="3" [(ngModel)]="newTreatment.medications" placeholder="Medicamentos a aplicar em cada sessão, posologia..."></textarea>
+  <label>Observações</label>
+  <textarea rows="2" [(ngModel)]="newTreatment.notes" placeholder="Frequência, cuidados..."></textarea>
+  <div class="form-actions"><button type="button" class="btn" (click)="createTreatment()">Criar tratamento</button></div>
+</div>
+}
+
+@if(treatments.length){
+<div class="card table-wrap">
+  <h3>Tratamentos do paciente</h3>
+  <table>
+    <tr><th>Medicamentos</th><th>Progresso</th><th>Médico</th><th>Sessões</th></tr>
+    @for(t of treatments;track t.id){
+      <tr>
+        <td>{{summary(t.medications)}}</td>
+        <td><span class="badge" [class.warn]="t.sessions_done < t.total_sessions">{{t.sessions_done}} de {{t.total_sessions}}</span></td>
+        <td>{{t.doctor_user_name || '—'}}</td>
+        <td>
+          <div class="session-chips">
+            @for(s of t.sessions;track s.id){
+              <button type="button" class="btn btn-secondary btn-sm" (click)="openSession(s.id)">
+                {{s.session_number}}ª · {{sessionStatusLabel(s.status)}}
+              </button>
+            }
+          </div>
+        </td>
+      </tr>
+    }
+  </table>
+</div>
+}
+
 @if(auth.canDispenseMedication()){
 <div class="card">
   <h3>Dispensar medicamento</h3>
@@ -153,6 +216,9 @@ type Attendance = {
   }@else{<p class="hint">Nenhum medicamento dispensado neste atendimento.</p>}
 </div>
 }`,
+  styles: [`
+    .session-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  `],
 })
 export class AttendanceComponent implements OnInit {
   patients: any[] = [];
@@ -172,10 +238,14 @@ export class AttendanceComponent implements OnInit {
 
   dispense = { product_id: 0, lot_id: 0, quantity: 1, notes: '' };
 
+  treatments: Treatment[] = [];
+  newTreatment = { medications: '', total_sessions: 1, notes: '' };
+
   constructor(
     private api: ApiService,
     public auth: AuthService,
     private route: ActivatedRoute,
+    private router: Router,
   ) {}
 
   ngOnInit() {
@@ -251,6 +321,56 @@ export class AttendanceComponent implements OnInit {
     this.techNotes = a.tech_notes || '';
     this.nursingNotes = a.nursing_notes || '';
     this.dispense = { product_id: 0, lot_id: 0, quantity: 1, notes: '' };
+    this.loadTreatments();
+  }
+
+  loadTreatments() {
+    if (!this.current) return;
+    this.api
+      .get<Treatment[]>('/treatments', { patient_id: this.current.patient_id })
+      .subscribe((r) => (this.treatments = r));
+  }
+
+  createTreatment() {
+    if (!this.current) return;
+    this.error = '';
+    if (!this.newTreatment.medications.trim()) {
+      this.error = 'Informe os medicamentos do tratamento';
+      return;
+    }
+    if (!this.newTreatment.total_sessions || this.newTreatment.total_sessions < 1) {
+      this.error = 'Informe o número de sessões';
+      return;
+    }
+    this.api.post<Treatment>(`/attendances/${this.current.id}/treatments`, this.newTreatment).subscribe({
+      next: () => {
+        this.newTreatment = { medications: '', total_sessions: 1, notes: '' };
+        this.loadTreatments();
+      },
+      error: (e) => (this.error = e.error?.detail || 'Erro ao criar tratamento'),
+    });
+  }
+
+  openSession(id: number) {
+    this.router.navigate(['/sessoes', id]);
+  }
+
+  summary(text?: string) {
+    const s = (text || '').trim();
+    return s.length > 60 ? `${s.slice(0, 60)}…` : s || '—';
+  }
+
+  sessionStatusLabel(status: string) {
+    switch (status) {
+      case 'pendente':
+        return 'Pendente';
+      case 'aguardando_enfermagem':
+        return 'Aguard. enfermagem';
+      case 'concluido':
+        return 'Concluída';
+      default:
+        return status;
+    }
   }
 
   saveSection(section: 'doctor' | 'tech' | 'nursing') {

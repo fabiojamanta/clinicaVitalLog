@@ -6,7 +6,7 @@ from .entry_code import generate_entry_code
 from .config import settings
 from sqlalchemy import text
 from .security import get_password_hash
-from .routers import auth, crud, stock, reports, attendances
+from .routers import auth, crud, stock, reports, attendances, treatments
 
 Base.metadata.create_all(bind=engine)
 
@@ -34,6 +34,8 @@ def migrate_sqlite():
                 conn.execute(text("ALTER TABLE stock_exits ADD COLUMN exit_type VARCHAR(20) DEFAULT 'consumo'"))
             if "attendance_id" not in exit_cols:
                 conn.execute(text("ALTER TABLE stock_exits ADD COLUMN attendance_id INTEGER"))
+            if "treatment_session_id" not in exit_cols:
+                conn.execute(text("ALTER TABLE stock_exits ADD COLUMN treatment_session_id INTEGER"))
 
             user_cols = {c[1] for c in conn.execute(text("PRAGMA table_info('users')")).fetchall()}
             if "cargo" not in user_cols:
@@ -62,6 +64,7 @@ def migrate_sqlite():
                 conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS city VARCHAR(120)"))
                 conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS responsible_name VARCHAR(180)"))
                 conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS state VARCHAR(2)"))
+                conn.execute(text("ALTER TABLE stock_exits ADD COLUMN IF NOT EXISTS treatment_session_id INTEGER"))
     except Exception:
         pass
 
@@ -123,6 +126,8 @@ app.include_router(crud.router)
 app.include_router(stock.router)
 app.include_router(reports.router)
 app.include_router(attendances.router)
+app.include_router(treatments.router)
+app.include_router(treatments.public_router)
 
 @app.get("/")
 def health():
