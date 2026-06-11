@@ -6,6 +6,7 @@ import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
+import { VitalsChartComponent, VitalSignPoint } from '../../shared/vitals-chart.component';
 
 type TreatmentSessionItem = {
   id: number;
@@ -46,6 +47,38 @@ type AttendanceExit = {
   lot_number: string;
 };
 
+type VitalSign = {
+  systolic_bp?: number | null;
+  diastolic_bp?: number | null;
+  heart_rate?: number | null;
+  temperature?: number | null;
+  weight?: number | null;
+  height?: number | null;
+  spo2?: number | null;
+  glycemia?: number | null;
+  notes?: string | null;
+  recorded_by_name?: string;
+  recorded_at?: string;
+  bmi?: number | null;
+};
+
+type BookingPayment = {
+  payment_type: string;
+  amount: number;
+  payment_method: string;
+  paid_at: string;
+};
+
+type BookingSummary = {
+  id: number;
+  scheduled_date: string;
+  total_amount: number;
+  deposit_amount: number;
+  balance_amount: number;
+  status: string;
+  payments: BookingPayment[];
+};
+
 type Attendance = {
   id: number;
   patient_id: number;
@@ -53,23 +86,29 @@ type Attendance = {
   attendance_date: string;
   doctor_notes?: string;
   prescription?: string;
+  external_prescription?: string;
   tech_notes?: string;
   nursing_notes?: string;
   doctor_user_name?: string;
   tech_user_name?: string;
   nursing_user_name?: string;
+  vitals_user_name?: string;
   doctor_updated_at?: string;
   tech_updated_at?: string;
   nursing_updated_at?: string;
+  vitals_recorded_at?: string;
+  workflow_status?: string;
+  booking?: BookingSummary | null;
+  vitals?: VitalSign | null;
   exits: AttendanceExit[];
 };
 
 @Component({
   selector: 'app-attendance',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe],
+  imports: [CommonModule, FormsModule, DateBrPipe, VitalsChartComponent],
   template: `
-<div class="top"><div class="page-title"><h1>Atendimento ao paciente</h1><p>Busque o paciente, registre anotações por equipe e dispense medicamentos.</p></div></div>
+<div class="top"><div class="page-title"><h1>Atendimento ao paciente</h1><p>Fluxo: sinais vitais → consulta médica → sessões de tratamento.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
 
 <div class="card grid grid-3">
@@ -94,11 +133,12 @@ type Attendance = {
   <h3>Histórico de atendimentos</h3>
   @if(history.length){
   <table>
-    <tr><th>Data</th><th>Registrado em</th><th>Ações</th></tr>
+    <tr><th>Data</th><th>Registrado em</th><th>Status</th><th>Ações</th></tr>
     @for(h of history;track h.id){
       <tr [class.row-active]="current?.id===h.id">
         <td>{{h.attendance_date | dateBr}}</td>
         <td>{{h.created_at | dateBr:'datetime'}}</td>
+        <td>—</td>
         <td><button type="button" class="btn btn-secondary btn-sm" (click)="loadAttendance(h.id)">Abrir</button></td>
       </tr>
     }
@@ -110,41 +150,78 @@ type Attendance = {
 @if(current){
 <div class="card">
   <h2>Atendimento de {{current.patient_name}} · {{current.attendance_date | dateBr}}</h2>
+  @if(current.workflow_status){<p class="hint">Status: {{workflowLabel(current.workflow_status)}}</p>}
+</div>
+
+@if(current.booking){
+<div class="card section-card">
+  <h3>Reserva e pagamentos</h3>
+  <div class="grid grid-3">
+    <div><label>Data prevista</label><input [value]="current.booking.scheduled_date" readonly tabindex="-1"></div>
+    <div><label>Valor total</label><input [ngModel]="formatMoney(current.booking.total_amount)" readonly tabindex="-1"></div>
+    <div><label>Status</label><input [ngModel]="bookingStatusLabel(current.booking.status)" readonly tabindex="-1"></div>
+  </div>
+  <table>
+    <tr><th>Tipo</th><th>Valor</th><th>Forma</th><th>Data</th></tr>
+    @for(p of current.booking.payments; track $index){
+      <tr>
+        <td>{{p.payment_type === 'entrada' ? 'Entrada 30%' : 'Saldo 70%'}}</td>
+        <td>{{formatMoney(p.amount)}}</td>
+        <td>{{paymentMethodLabel(p.payment_method)}}</td>
+        <td>{{p.paid_at | dateBr:'datetime'}}</td>
+      </tr>
+    }
+  </table>
+</div>
+}
+
+<div class="card section-card">
+  <div class="section-head">
+    <h3>Sinais vitais</h3>
+    @if(current.vitals_recorded_at){<span class="hint">{{current.vitals_user_name}} · {{current.vitals_recorded_at | dateBr:'datetime'}}</span>}
+    @if(auth.canViewVitalsChart()){
+      <button type="button" class="btn btn-secondary btn-sm" (click)="openVitalsChart()">Ver evolução dos sinais vitais</button>
+    }
+  </div>
+  <div class="grid grid-3">
+    <div><label>PA sistólica (mmHg)</label><input type="number" [(ngModel)]="vitals.systolic_bp" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>PA diastólica (mmHg)</label><input type="number" [(ngModel)]="vitals.diastolic_bp" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>FC (bpm)</label><input type="number" [(ngModel)]="vitals.heart_rate" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>Temperatura (°C)</label><input type="number" step="0.1" [(ngModel)]="vitals.temperature" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>Peso (kg)</label><input type="number" step="0.01" [(ngModel)]="vitals.weight" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>Altura (cm)</label><input type="number" step="0.1" [(ngModel)]="vitals.height" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>SpO₂ (%)</label><input type="number" [(ngModel)]="vitals.spo2" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>Glicemia (mg/dL)</label><input type="number" [(ngModel)]="vitals.glycemia" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></div>
+    <div><label>IMC</label><input [ngModel]="bmiPreview" readonly tabindex="-1"></div>
+  </div>
+  <label>Observações</label>
+  <textarea rows="2" [(ngModel)]="vitals.notes" [readonly]="!auth.canEditVitals() || !!current.doctor_updated_at"></textarea>
+  @if(auth.canEditVitals() && !current.doctor_updated_at){
+    <div class="form-actions"><button type="button" class="btn" (click)="saveVitals()">Salvar sinais vitais</button></div>
+  }
 </div>
 
 <div class="card section-card">
   <div class="section-head">
-    <h3>Anotações do Médico e Prescrição</h3>
+    <h3>Consulta médica e prescrição</h3>
     @if(current.doctor_updated_at){<span class="hint">{{current.doctor_user_name}} · {{current.doctor_updated_at | dateBr:'datetime'}}</span>}
   </div>
+  @if(!current.vitals_recorded_at && auth.canEditDoctorSection()){
+    <p class="hint warn">Aguardando registro dos sinais vitais pela enfermagem.</p>
+  }
   <label>Anotações</label>
-  <textarea rows="4" [(ngModel)]="doctorNotes" [readonly]="!auth.canEditDoctorSection()" placeholder="Evolução, conduta..."></textarea>
-  <label>Prescrição de medicamentos</label>
-  <textarea rows="4" [(ngModel)]="prescription" [readonly]="!auth.canEditDoctorSection()" placeholder="Medicamentos prescritos, posologia..."></textarea>
+  <textarea rows="4" [(ngModel)]="doctorNotes" [readonly]="!auth.canEditDoctorSection() || !current.vitals_recorded_at" placeholder="Evolução, conduta..."></textarea>
+  <label>Prescrição de medicamentos (clínica)</label>
+  <textarea rows="4" [(ngModel)]="prescription" [readonly]="!auth.canEditDoctorSection() || !current.vitals_recorded_at" placeholder="Medicamentos prescritos, posologia..."></textarea>
+  <label>Receita externa (exames/medicamentos de compra externa)</label>
+  <textarea rows="4" [(ngModel)]="externalPrescription" [readonly]="!auth.canEditDoctorSection() || !current.vitals_recorded_at" placeholder="Exames e medicamentos para compra em farmácia externa..."></textarea>
   @if(auth.canEditDoctorSection()){
-    <div class="form-actions"><button type="button" class="btn" (click)="saveSection('doctor')">Salvar seção do médico</button></div>
-  }
-</div>
-
-<div class="card section-card">
-  <div class="section-head">
-    <h3>Anotações da Técnica de Enfermagem</h3>
-    @if(current.tech_updated_at){<span class="hint">{{current.tech_user_name}} · {{current.tech_updated_at | dateBr:'datetime'}}</span>}
-  </div>
-  <textarea rows="4" [(ngModel)]="techNotes" [readonly]="!auth.canEditTechSection()" placeholder="Anotações da técnica de enfermagem..."></textarea>
-  @if(auth.canEditTechSection()){
-    <div class="form-actions"><button type="button" class="btn" (click)="saveSection('tech')">Salvar seção da técnica</button></div>
-  }
-</div>
-
-<div class="card section-card">
-  <div class="section-head">
-    <h3>Anotações da Enfermagem</h3>
-    @if(current.nursing_updated_at){<span class="hint">{{current.nursing_user_name}} · {{current.nursing_updated_at | dateBr:'datetime'}}</span>}
-  </div>
-  <textarea rows="4" [(ngModel)]="nursingNotes" [readonly]="!auth.canEditNursingSection()" placeholder="Anotações da enfermagem..."></textarea>
-  @if(auth.canEditNursingSection()){
-    <div class="form-actions"><button type="button" class="btn" (click)="saveSection('nursing')">Salvar seção da enfermagem</button></div>
+    <div class="form-actions">
+      <button type="button" class="btn" [disabled]="!current.vitals_recorded_at" (click)="saveSection('doctor')">Salvar consulta médica</button>
+      @if(externalPrescription.trim()){
+        <button type="button" class="btn btn-secondary" (click)="printExternalPrescription()">Imprimir receita</button>
+      }
+    </div>
   }
 </div>
 
@@ -190,6 +267,17 @@ type Attendance = {
 </div>
 }
 
+<div class="card section-card">
+  <div class="section-head">
+    <h3>Anotações da Técnica de Enfermagem</h3>
+    @if(current.tech_updated_at){<span class="hint">{{current.tech_user_name}} · {{current.tech_updated_at | dateBr:'datetime'}}</span>}
+  </div>
+  <textarea rows="4" [(ngModel)]="techNotes" [readonly]="!auth.canEditTechSection()" placeholder="Anotações da técnica de enfermagem..."></textarea>
+  @if(auth.canEditTechSection()){
+    <div class="form-actions"><button type="button" class="btn" (click)="saveSection('tech')">Salvar seção da técnica</button></div>
+  }
+</div>
+
 @if(auth.canDispenseMedication()){
 <div class="card">
   <h3>Dispensar medicamento</h3>
@@ -204,6 +292,17 @@ type Attendance = {
 </div>
 }
 
+<div class="card section-card">
+  <div class="section-head">
+    <h3>Finalização da enfermagem</h3>
+    @if(current.nursing_updated_at){<span class="hint">{{current.nursing_user_name}} · {{current.nursing_updated_at | dateBr:'datetime'}}</span>}
+  </div>
+  <textarea rows="3" [(ngModel)]="nursingNotes" [readonly]="!auth.canEditNursingSection()" placeholder="Observações finais da enfermagem..."></textarea>
+  @if(auth.canEditNursingSection()){
+    <div class="form-actions"><button type="button" class="btn" (click)="saveSection('nursing')">Finalizar enfermagem</button></div>
+  }
+</div>
+
 <div class="card table-wrap">
   <h3>Medicamentos aplicados/repassados neste atendimento</h3>
   @if(current.exits.length){
@@ -215,9 +314,23 @@ type Attendance = {
   </table>
   }@else{<p class="hint">Nenhum medicamento dispensado neste atendimento.</p>}
 </div>
+}
+
+@if(vitalsChartOpen){
+<div class="modal-backdrop" (click)="closeVitalsChart()"></div>
+<div class="modal card vitals-modal">
+  <div class="section-head">
+    <h3>Evolução dos sinais vitais — {{current?.patient_name}}</h3>
+    <button type="button" class="btn btn-secondary btn-sm" (click)="closeVitalsChart()">Fechar</button>
+  </div>
+  <app-vitals-chart [points]="vitalsHistory"></app-vitals-chart>
+</div>
 }`,
   styles: [`
     .session-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; }
+    .vitals-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 101; width: min(920px, 94vw); max-height: 90vh; overflow: auto; }
   `],
 })
 export class AttendanceComponent implements OnInit {
@@ -233,8 +346,24 @@ export class AttendanceComponent implements OnInit {
 
   doctorNotes = '';
   prescription = '';
+  externalPrescription = '';
   techNotes = '';
   nursingNotes = '';
+
+  vitals = {
+    systolic_bp: null as number | null,
+    diastolic_bp: null as number | null,
+    heart_rate: null as number | null,
+    temperature: null as number | null,
+    weight: null as number | null,
+    height: null as number | null,
+    spo2: null as number | null,
+    glycemia: null as number | null,
+    notes: '',
+  };
+
+  vitalsChartOpen = false;
+  vitalsHistory: VitalSignPoint[] = [];
 
   dispense = { product_id: 0, lot_id: 0, quantity: 1, notes: '' };
 
@@ -269,6 +398,14 @@ export class AttendanceComponent implements OnInit {
     if (!this.dispense.lot_id) return null;
     const lot = this.lots.find((l) => l.id === this.dispense.lot_id);
     return lot ? lot.current_stock : null;
+  }
+
+  get bmiPreview(): string {
+    const w = this.vitals.weight;
+    const h = this.vitals.height;
+    if (w == null || h == null || h <= 0) return '—';
+    const bmi = w / ((h / 100) ** 2);
+    return bmi.toFixed(1);
   }
 
   onPatientChange() {
@@ -318,10 +455,52 @@ export class AttendanceComponent implements OnInit {
     this.current = a;
     this.doctorNotes = a.doctor_notes || '';
     this.prescription = a.prescription || '';
+    this.externalPrescription = a.external_prescription || '';
     this.techNotes = a.tech_notes || '';
     this.nursingNotes = a.nursing_notes || '';
+    const v = a.vitals;
+    this.vitals = {
+      systolic_bp: v?.systolic_bp ?? null,
+      diastolic_bp: v?.diastolic_bp ?? null,
+      heart_rate: v?.heart_rate ?? null,
+      temperature: v?.temperature ?? null,
+      weight: v?.weight ?? null,
+      height: v?.height ?? null,
+      spo2: v?.spo2 ?? null,
+      glycemia: v?.glycemia ?? null,
+      notes: v?.notes || '',
+    };
     this.dispense = { product_id: 0, lot_id: 0, quantity: 1, notes: '' };
     this.loadTreatments();
+  }
+
+  saveVitals() {
+    if (!this.current) return;
+    this.error = '';
+    this.api.put<Attendance>(`/attendances/${this.current.id}/vitals`, this.vitals).subscribe({
+      next: (a) => this.setCurrent(a),
+      error: (e) => (this.error = e.error?.detail || 'Erro ao salvar sinais vitais'),
+    });
+  }
+
+  openVitalsChart() {
+    if (!this.current) return;
+    this.api.get<VitalSignPoint[]>(`/patients/${this.current.patient_id}/vital-signs`).subscribe({
+      next: (r) => {
+        this.vitalsHistory = r;
+        this.vitalsChartOpen = true;
+      },
+      error: (e) => (this.error = e.error?.detail || 'Erro ao carregar histórico'),
+    });
+  }
+
+  closeVitalsChart() {
+    this.vitalsChartOpen = false;
+  }
+
+  printExternalPrescription() {
+    if (!this.current) return;
+    this.api.openPdf(`/attendances/${this.current.id}/external-prescription.pdf`);
   }
 
   loadTreatments() {
@@ -373,13 +552,55 @@ export class AttendanceComponent implements OnInit {
     }
   }
 
+  workflowLabel(status: string) {
+    switch (status) {
+      case 'aguardando_sinais_vitais': return 'Aguardando sinais vitais';
+      case 'aguardando_medico': return 'Aguardando médico';
+      case 'aguardando_tecnica': return 'Aguardando técnica';
+      case 'aguardando_enfermagem': return 'Aguardando enfermagem';
+      case 'concluido': return 'Concluído';
+      default: return status;
+    }
+  }
+
+  formatMoney(v: number) {
+    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  bookingStatusLabel(s: string) {
+    switch (s) {
+      case 'agendado': return 'Agendado';
+      case 'presente': return 'Presente';
+      case 'cancelado': return 'Cancelado';
+      default: return s;
+    }
+  }
+
+  paymentMethodLabel(m: string) {
+    switch (m) {
+      case 'pix': return 'PIX';
+      case 'dinheiro': return 'Dinheiro';
+      case 'cartao': return 'Cartão';
+      case 'transferencia': return 'Transferência';
+      default: return m;
+    }
+  }
+
   saveSection(section: 'doctor' | 'tech' | 'nursing') {
     if (!this.current) return;
     this.error = '';
     let body: any;
-    if (section === 'doctor') body = { notes: this.doctorNotes, prescription: this.prescription };
-    else if (section === 'tech') body = { notes: this.techNotes };
-    else body = { notes: this.nursingNotes };
+    if (section === 'doctor') {
+      body = {
+        notes: this.doctorNotes,
+        prescription: this.prescription,
+        external_prescription: this.externalPrescription,
+      };
+    } else if (section === 'tech') {
+      body = { notes: this.techNotes };
+    } else {
+      body = { notes: this.nursingNotes };
+    }
     this.api.put<Attendance>(`/attendances/${this.current.id}/${section}`, body).subscribe({
       next: (a) => this.setCurrent(a),
       error: (e) => (this.error = e.error?.detail || 'Erro ao salvar anotações'),

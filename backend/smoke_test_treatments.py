@@ -22,6 +22,7 @@ def seed_users():
         ("Medico", "medico@x.com", UserRole.medico),
         ("Tecnica", "tecnica@x.com", UserRole.tecnica_enfermagem),
         ("Enfermeira", "enf@x.com", UserRole.enfermeira),
+        ("Vendedor", "vend@x.com", UserRole.vendedor),
     ]:
         db.add(User(clinic_id=1, name=name, email=email,
                     password_hash=get_password_hash("123"), role=role, active=True))
@@ -45,13 +46,28 @@ seed_users()
 med = login("medico@x.com")
 tec = login("tecnica@x.com")
 enf = login("enf@x.com")
+vend = login("vend@x.com")
 
 pid = next(c["id"] for c in client.get("/clients", headers=med).json() if c["name"] == "Paciente Teste")
 
 r = client.post("/attendances", json={"patient_id": pid, "attendance_date": "2026-06-11"}, headers=med)
 check(r.status_code == 200, "criar atendimento")
 att_id = r.json()["id"]
-client.put(f"/attendances/{att_id}/doctor", json={"notes": "consulta", "prescription": ""}, headers=med)
+
+r = client.put(f"/attendances/{att_id}/doctor", json={"notes": "consulta", "prescription": ""}, headers=med)
+check(r.status_code == 400, "médico bloqueado sem sinais vitais")
+
+rows = client.get("/attendances/pending", headers=enf).json()
+check(any(x["pending_action"] == "registrar_sinais_vitais" for x in rows if x["item_type"] == "atendimento"),
+      "enfermeira vê pendência de sinais vitais")
+
+r = client.put(f"/attendances/{att_id}/vitals",
+               json={"systolic_bp": 120, "diastolic_bp": 80, "heart_rate": 72, "temperature": 36.5,
+                     "weight": 70, "height": 170, "spo2": 98, "glycemia": 95}, headers=enf)
+check(r.status_code == 200 and r.json()["vitals_recorded_at"], "enfermeira registra sinais vitais")
+
+r = client.put(f"/attendances/{att_id}/doctor", json={"notes": "consulta", "prescription": ""}, headers=med)
+check(r.status_code == 200, "médico salva após sinais vitais")
 
 # Criar tratamento (médico)
 r = client.post(f"/attendances/{att_id}/treatments",
@@ -126,5 +142,32 @@ check(r.status_code == 200 and r.content[:4] == b"%PDF", "comprovante PDF gerado
 # Progresso do tratamento
 r = client.get(f"/treatments?patient_id={pid}", headers=med)
 check(r.json()[0]["sessions_done"] == 2, "progresso 2/3")
+
+# Reserva 30% + check-in 70%
+r = client.post("/bookings", json={
+    "patient_id": pid, "scheduled_date": "2026-06-15", "total_amount": 1000,
+    "payment_method": "pix",
+}, headers=vend)
+check(r.status_code == 200 and float(r.json()["deposit_amount"]) == 300.0, "reserva com entrada 30%")
+booking_id = r.json()["id"]
+
+r = client.post(f"/bookings/{booking_id}/check-in", json={"payment_method": "dinheiro"}, headers=vend)
+check(r.status_code == 200 and r.json()["attendance_id"], "check-in cria atendimento")
+booking_att_id = r.json()["attendance_id"]
+
+r = client.get(f"/attendances/{booking_att_id}", headers=med)
+check(r.json()["booking"] and r.json()["booking"]["status"] == "presente", "atendimento vinculado à reserva")
+
+# Receita externa PDF
+r = client.put(f"/attendances/{att_id}/doctor",
+               json={"notes": "consulta", "prescription": "", "external_prescription": "Dipirona 500mg"},
+               headers=med)
+check(r.status_code == 200, "receita externa salva")
+r = client.get(f"/attendances/{att_id}/external-prescription.pdf", headers=med)
+check(r.status_code == 200 and r.content[:4] == b"%PDF", "PDF receita externa")
+
+# Histórico de sinais vitais
+r = client.get(f"/patients/{pid}/vital-signs", headers=med)
+check(r.status_code == 200 and len(r.json()) >= 1, "histórico de sinais vitais")
 
 print("\nTodos os testes passaram.")

@@ -1,7 +1,16 @@
 from pydantic import BaseModel, field_serializer
 from datetime import date, datetime
 from typing import Optional, Any
-from .models import ProductType, ClientType, UserRole, MovementStatus, ExitType
+from .models import (
+    ProductType,
+    ClientType,
+    UserRole,
+    MovementStatus,
+    ExitType,
+    BookingStatus,
+    PaymentType,
+    PaymentMethod,
+)
 from .datetime_utils import format_datetime_br_iso
 
 class Token(BaseModel):
@@ -169,10 +178,105 @@ class CancelExit(BaseModel):
 class AttendanceCreate(BaseModel):
     patient_id: int
     attendance_date: date
+    total_amount: Optional[float] = None
+    payment_method: Optional[PaymentMethod] = None
+    payment_notes: Optional[str] = None
 
 class AttendanceSectionUpdate(BaseModel):
     notes: Optional[str] = None
     prescription: Optional[str] = None
+    external_prescription: Optional[str] = None
+
+class PaymentRead(BaseModel):
+    id: int
+    payment_type: PaymentType
+    amount: float
+    payment_method: PaymentMethod
+    paid_at: datetime
+    user_id: int
+    user_name: Optional[str] = None
+    notes: Optional[str] = None
+
+    @field_serializer('paid_at')
+    def serialize_paid_at(self, value: datetime) -> str | None:
+        return format_datetime_br_iso(value)
+
+class BookingRead(BaseModel):
+    id: int
+    patient_id: int
+    patient_name: Optional[str] = None
+    scheduled_date: date
+    total_amount: float
+    deposit_amount: float
+    balance_amount: float
+    status: BookingStatus
+    attendance_id: Optional[int] = None
+    notes: Optional[str] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    payments: list[PaymentRead] = []
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, value: datetime | None) -> str | None:
+        return format_datetime_br_iso(value)
+
+class BookingCreate(BaseModel):
+    patient_id: int
+    scheduled_date: date
+    total_amount: float
+    payment_method: PaymentMethod
+    paid_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    payment_notes: Optional[str] = None
+
+class BookingCheckIn(BaseModel):
+    payment_method: PaymentMethod
+    paid_at: Optional[datetime] = None
+    payment_notes: Optional[str] = None
+
+class VitalSignUpdate(BaseModel):
+    systolic_bp: Optional[int] = None
+    diastolic_bp: Optional[int] = None
+    heart_rate: Optional[int] = None
+    temperature: Optional[float] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    spo2: Optional[int] = None
+    glycemia: Optional[int] = None
+    notes: Optional[str] = None
+
+class VitalSignRead(BaseModel):
+    id: int
+    patient_id: int
+    attendance_id: int
+    systolic_bp: Optional[int] = None
+    diastolic_bp: Optional[int] = None
+    heart_rate: Optional[int] = None
+    temperature: Optional[float] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    spo2: Optional[int] = None
+    glycemia: Optional[int] = None
+    notes: Optional[str] = None
+    recorded_by: int
+    recorded_by_name: Optional[str] = None
+    recorded_at: datetime
+    attendance_date: Optional[date] = None
+    bmi: Optional[float] = None
+
+    @field_serializer('recorded_at')
+    def serialize_recorded_at(self, value: datetime) -> str | None:
+        return format_datetime_br_iso(value)
+
+class BookingSummary(BaseModel):
+    id: int
+    scheduled_date: date
+    total_amount: float
+    deposit_amount: float
+    balance_amount: float
+    status: BookingStatus
+    payments: list[PaymentRead] = []
 
 class AttendanceDispenseCreate(BaseModel):
     product_id: int
@@ -199,20 +303,27 @@ class AttendanceRead(BaseModel):
     attendance_date: date
     doctor_notes: Optional[str] = None
     prescription: Optional[str] = None
+    external_prescription: Optional[str] = None
     tech_notes: Optional[str] = None
     nursing_notes: Optional[str] = None
     doctor_user_id: Optional[int] = None
     tech_user_id: Optional[int] = None
     nursing_user_id: Optional[int] = None
+    vitals_user_id: Optional[int] = None
     doctor_user_name: Optional[str] = None
     tech_user_name: Optional[str] = None
     nursing_user_name: Optional[str] = None
+    vitals_user_name: Optional[str] = None
     doctor_updated_at: Optional[datetime] = None
     tech_updated_at: Optional[datetime] = None
     nursing_updated_at: Optional[datetime] = None
+    vitals_recorded_at: Optional[datetime] = None
+    workflow_status: Optional[str] = None
+    booking: Optional[BookingSummary] = None
+    vitals: Optional[VitalSignRead] = None
     exits: list[ExitRead] = []
 
-    @field_serializer('doctor_updated_at', 'tech_updated_at', 'nursing_updated_at')
+    @field_serializer('doctor_updated_at', 'tech_updated_at', 'nursing_updated_at', 'vitals_recorded_at')
     def serialize_section_updated_at(self, value: datetime | None) -> str | None:
         return format_datetime_br_iso(value)
 

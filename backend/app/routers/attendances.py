@@ -1,10 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
-from sqlalchemy.orm import Session
+from decimal import Decimal, ROUND_HALF_UP
+from io import BytesIO
 from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..datetime_utils import now_br
-from ..models import Attendance, Client, ClientType, StockExit, MovementStatus, User, UserRole
+from ..models import (
+    Attendance,
+    BookingStatus,
+    Client,
+    ClientType,
+    Clinic,
+    ConsultationBooking,
+    MovementStatus,
+    Payment,
+    PaymentType,
+    User,
+    UserRole,
+    VitalSign,
+)
 from ..schemas import (
     AttendanceCreate,
     AttendanceSectionUpdate,
@@ -12,7 +29,11 @@ from ..schemas import (
     AttendanceListItem,
     AttendanceRead,
     AttendancePendingItem,
+    BookingSummary,
     ExitRead,
+    PaymentRead,
+    VitalSignRead,
+    VitalSignUpdate,
 )
 from ..deps import get_current_user, require_roles, log_action
 from ..attendance_workflow import (
@@ -21,17 +42,87 @@ from ..attendance_workflow import (
     session_status,
     workflow_status,
     has_dispensed,
+    is_vitals_done,
+    is_doctor_done,
 )
 from ..models import Treatment, TreatmentSession
+from ..prescription_pdf import build_external_prescription_pdf
 from .stock import perform_stock_exit, _exit_to_read
-
 router = APIRouter(tags=["atendimentos"])
 
 ATTENDANCE_ROLES = (UserRole.medico, UserRole.enfermeira, UserRole.tecnica_enfermagem)
 DISPENSE_ROLES = (UserRole.enfermeira, UserRole.tecnica_enfermagem)
+VITALS_ROLES = (UserRole.enfermeira, UserRole.administrador)
+WALKIN_PAYMENT_ROLES = (UserRole.vendedor, UserRole.operacional, UserRole.administrador)
+
+
+def _money(value: float | Decimal) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _calc_bmi(weight: Decimal | float | None, height: Decimal | float | None) -> float | None:
+    if weight is None or height is None:
+        return None
+    h = float(height)
+    if h <= 0:
+        return None
+    w = float(weight)
+    bmi = w / ((h / 100) ** 2)
+    return round(bmi, 1)
+
+
+def _payment_to_read(p: Payment) -> PaymentRead:
+    return PaymentRead(
+        id=p.id,
+        payment_type=p.payment_type,
+        amount=float(p.amount),
+        payment_method=p.payment_method,
+        paid_at=p.paid_at,
+        user_id=p.user_id,
+        user_name=p.user.name if p.user else None,
+        notes=p.notes,
+    )
+
+
+def _vital_to_read(vs: VitalSign, attendance_date=None) -> VitalSignRead:
+    return VitalSignRead(
+        id=vs.id,
+        patient_id=vs.patient_id,
+        attendance_id=vs.attendance_id,
+        systolic_bp=vs.systolic_bp,
+        diastolic_bp=vs.diastolic_bp,
+        heart_rate=vs.heart_rate,
+        temperature=float(vs.temperature) if vs.temperature is not None else None,
+        weight=float(vs.weight) if vs.weight is not None else None,
+        height=float(vs.height) if vs.height is not None else None,
+        spo2=vs.spo2,
+        glycemia=vs.glycemia,
+        notes=vs.notes,
+        recorded_by=vs.recorded_by,
+        recorded_by_name=vs.recorder.name if vs.recorder else None,
+        recorded_at=vs.recorded_at,
+        attendance_date=attendance_date,
+        bmi=_calc_bmi(vs.weight, vs.height),
+    )
+
+
+def _booking_summary(att: Attendance) -> BookingSummary | None:
+    booking = att.booking
+    if not booking:
+        return None
+    return BookingSummary(
+        id=booking.id,
+        scheduled_date=booking.scheduled_date,
+        total_amount=float(booking.total_amount),
+        deposit_amount=float(booking.deposit_amount),
+        balance_amount=float(booking.balance_amount),
+        status=booking.status,
+        payments=[_payment_to_read(p) for p in sorted(booking.payments or [], key=lambda x: x.id)],
+    )
 
 
 def _attendance_to_read(att: Attendance) -> AttendanceRead:
+    vs = att.vital_signs
     return AttendanceRead(
         id=att.id,
         patient_id=att.patient_id,
@@ -39,17 +130,24 @@ def _attendance_to_read(att: Attendance) -> AttendanceRead:
         attendance_date=att.attendance_date,
         doctor_notes=att.doctor_notes,
         prescription=att.prescription,
+        external_prescription=att.external_prescription,
         tech_notes=att.tech_notes,
         nursing_notes=att.nursing_notes,
         doctor_user_id=att.doctor_user_id,
         tech_user_id=att.tech_user_id,
         nursing_user_id=att.nursing_user_id,
+        vitals_user_id=att.vitals_user_id,
         doctor_user_name=att.doctor_user.name if att.doctor_user else None,
         tech_user_name=att.tech_user.name if att.tech_user else None,
         nursing_user_name=att.nursing_user.name if att.nursing_user else None,
+        vitals_user_name=att.vitals_user.name if att.vitals_user else None,
         doctor_updated_at=att.doctor_updated_at,
         tech_updated_at=att.tech_updated_at,
         nursing_updated_at=att.nursing_updated_at,
+        vitals_recorded_at=att.vitals_recorded_at,
+        workflow_status=workflow_status(att),
+        booking=_booking_summary(att),
+        vitals=_vital_to_read(vs, att.attendance_date) if vs else None,
         exits=[
             _exit_to_read(e)
             for e in sorted(att.exits, key=lambda e: e.id)
@@ -102,12 +200,11 @@ def list_pending_attendances(
 
     q = db.query(Attendance).filter(
         Attendance.clinic_id == user.clinic_id,
-        Attendance.doctor_updated_at.isnot(None),
         Attendance.nursing_updated_at.is_(None),
     )
     if patient_id:
         q = q.filter(Attendance.patient_id == patient_id)
-    rows = q.order_by(Attendance.attendance_date.desc(), Attendance.doctor_updated_at.desc()).all()
+    rows = q.order_by(Attendance.attendance_date.desc(), Attendance.created_at.desc()).all()
 
     result: list[AttendancePendingItem] = []
     for att in rows:
@@ -142,8 +239,6 @@ def list_pending_attendances(
         sq = sq.filter(Treatment.patient_id == patient_id)
     sessions = sq.order_by(TreatmentSession.treatment_id, TreatmentSession.session_number).all()
 
-    # Mostra todas as sessões aguardando enfermagem, mas apenas a próxima
-    # sessão "pendente" de cada tratamento (as sessões são sequenciais).
     seen_pending_treatment: set[int] = set()
     for s in sessions:
         t = s.treatment
@@ -175,6 +270,36 @@ def list_pending_attendances(
     return result
 
 
+@router.get("/patients/{patient_id}/vital-signs", response_model=list[VitalSignRead])
+def list_patient_vital_signs(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if user.role not in (
+        UserRole.medico,
+        UserRole.enfermeira,
+        UserRole.administrador,
+    ):
+        raise HTTPException(403, "Acesso negado")
+
+    patient = db.query(Client).filter_by(id=patient_id, clinic_id=user.clinic_id).first()
+    if not patient:
+        raise HTTPException(404, "Paciente não encontrado")
+
+    rows = (
+        db.query(VitalSign)
+        .filter(VitalSign.clinic_id == user.clinic_id, VitalSign.patient_id == patient_id)
+        .order_by(VitalSign.recorded_at.asc())
+        .all()
+    )
+    result = []
+    for vs in rows:
+        att_date = vs.attendance.attendance_date if vs.attendance else None
+        result.append(_vital_to_read(vs, att_date))
+    return result
+
+
 @router.get("/attendances/{attendance_id}", response_model=AttendanceRead)
 def get_attendance(
     attendance_id: int,
@@ -190,7 +315,7 @@ def create_attendance(
     payload: AttendanceCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*ATTENDANCE_ROLES)),
+    user: User = Depends(require_roles(*ATTENDANCE_ROLES, *WALKIN_PAYMENT_ROLES)),
 ):
     patient = db.query(Client).filter_by(id=payload.patient_id, clinic_id=user.clinic_id).first()
     if not patient:
@@ -218,6 +343,41 @@ def create_attendance(
     )
     db.add(obj)
     db.flush()
+
+    if payload.total_amount and payload.total_amount > 0:
+        if user.role not in WALKIN_PAYMENT_ROLES and user.role != UserRole.administrador:
+            raise HTTPException(403, "Sem permissão para registrar pagamento na chegada")
+        if not payload.payment_method:
+            raise HTTPException(400, "Informe a forma de pagamento")
+
+        total = _money(payload.total_amount)
+        booking = ConsultationBooking(
+            clinic_id=user.clinic_id,
+            patient_id=payload.patient_id,
+            scheduled_date=payload.attendance_date,
+            total_amount=total,
+            deposit_amount=total,
+            balance_amount=Decimal("0.00"),
+            status=BookingStatus.presente,
+            attendance_id=obj.id,
+            created_by=user.id,
+        )
+        db.add(booking)
+        db.flush()
+        obj.booking_id = booking.id
+
+        payment = Payment(
+            clinic_id=user.clinic_id,
+            booking_id=booking.id,
+            payment_type=PaymentType.entrada,
+            amount=total,
+            payment_method=payload.payment_method,
+            paid_at=now_br(),
+            user_id=user.id,
+            notes=payload.payment_notes,
+        )
+        db.add(payment)
+
     log_action(
         db, user, "create", "attendances", obj.id,
         after={"patient_id": obj.patient_id, "attendance_date": obj.attendance_date.isoformat()},
@@ -226,6 +386,55 @@ def create_attendance(
     db.commit()
     db.refresh(obj)
     return _attendance_to_read(obj)
+
+
+@router.put("/attendances/{attendance_id}/vitals", response_model=AttendanceRead)
+def update_vitals(
+    attendance_id: int,
+    payload: VitalSignUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*VITALS_ROLES)),
+):
+    att = _get_attendance(db, user, attendance_id)
+    if is_doctor_done(att):
+        raise HTTPException(400, "Consulta médica já registrada; sinais vitais bloqueados")
+
+    now = now_br()
+    vs = att.vital_signs
+    if not vs:
+        vs = VitalSign(
+            clinic_id=user.clinic_id,
+            patient_id=att.patient_id,
+            attendance_id=att.id,
+            recorded_by=user.id,
+            recorded_at=now,
+        )
+        db.add(vs)
+
+    vs.systolic_bp = payload.systolic_bp
+    vs.diastolic_bp = payload.diastolic_bp
+    vs.heart_rate = payload.heart_rate
+    vs.temperature = payload.temperature
+    vs.weight = payload.weight
+    vs.height = payload.height
+    vs.spo2 = payload.spo2
+    vs.glycemia = payload.glycemia
+    vs.notes = payload.notes
+    vs.recorded_by = user.id
+    vs.recorded_at = now
+
+    att.vitals_user_id = user.id
+    att.vitals_recorded_at = now
+
+    log_action(
+        db, user, "update_vitals", "attendances", att.id,
+        after={"vitals_recorded_at": now.isoformat()},
+        request=request,
+    )
+    db.commit()
+    db.refresh(att)
+    return _attendance_to_read(att)
 
 
 def _update_section(
@@ -239,12 +448,24 @@ def _update_section(
     att = _get_attendance(db, user, attendance_id)
     now = now_br()
     if section == "doctor":
-        before = {"doctor_notes": att.doctor_notes, "prescription": att.prescription}
+        if not is_vitals_done(att):
+            raise HTTPException(400, "Registre os sinais vitais antes da consulta médica")
+        before = {
+            "doctor_notes": att.doctor_notes,
+            "prescription": att.prescription,
+            "external_prescription": att.external_prescription,
+        }
         att.doctor_notes = payload.notes
         att.prescription = payload.prescription
+        if payload.external_prescription is not None:
+            att.external_prescription = payload.external_prescription
         att.doctor_user_id = user.id
         att.doctor_updated_at = now
-        after = {"doctor_notes": att.doctor_notes, "prescription": att.prescription}
+        after = {
+            "doctor_notes": att.doctor_notes,
+            "prescription": att.prescription,
+            "external_prescription": att.external_prescription,
+        }
     elif section == "tech":
         before = {"tech_notes": att.tech_notes}
         att.tech_notes = payload.notes
@@ -297,6 +518,28 @@ def update_nursing_section(
     user: User = Depends(require_roles(UserRole.enfermeira)),
 ):
     return _attendance_to_read(_update_section(db, user, request, attendance_id, "nursing", payload))
+
+
+@router.get("/attendances/{attendance_id}/external-prescription.pdf")
+def external_prescription_pdf(
+    attendance_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    att = _get_attendance(db, user, attendance_id)
+    if user.role not in (UserRole.medico, UserRole.administrador) and att.doctor_user_id != user.id:
+        raise HTTPException(403, "Acesso negado")
+    if not (att.external_prescription or "").strip():
+        raise HTTPException(400, "Receita externa não preenchida")
+
+    clinic = db.query(Clinic).filter_by(id=user.clinic_id).first()
+    pdf = build_external_prescription_pdf(att, clinic)
+    filename = f"receita-externa-{att.id}.pdf"
+    return StreamingResponse(
+        BytesIO(pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @router.post("/attendances/{attendance_id}/exits", response_model=ExitRead)

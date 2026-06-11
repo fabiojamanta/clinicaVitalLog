@@ -53,6 +53,7 @@ export const NAV_MENU: NavMenuEntry[] = [
     id: 'atendimentos',
     label: 'Atendimentos',
     children: [
+      { label: 'Reservas', route: '/reservas', menuItem: 'reservas' },
       { label: 'Consulta', route: '/atendimentos', menuItem: 'atendimentos' },
       { label: 'Pendências', route: '/atendimentos-pendentes', menuItem: 'atendimentos_pendentes' },
     ],

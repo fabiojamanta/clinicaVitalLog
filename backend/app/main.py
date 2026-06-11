@@ -6,7 +6,7 @@ from .entry_code import generate_entry_code
 from .config import settings
 from sqlalchemy import text
 from .security import get_password_hash
-from .routers import auth, crud, stock, reports, attendances, treatments
+from .routers import auth, crud, stock, reports, attendances, treatments, bookings
 
 Base.metadata.create_all(bind=engine)
 
@@ -52,6 +52,16 @@ def migrate_sqlite():
                 conn.execute(text("ALTER TABLE clients ADD COLUMN responsible_name VARCHAR(180)"))
             if "state" not in client_cols:
                 conn.execute(text("ALTER TABLE clients ADD COLUMN state VARCHAR(2)"))
+
+            att_cols = {c[1] for c in conn.execute(text("PRAGMA table_info('attendances')")).fetchall()}
+            if "booking_id" not in att_cols:
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN booking_id INTEGER"))
+            if "external_prescription" not in att_cols:
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN external_prescription TEXT"))
+            if "vitals_user_id" not in att_cols:
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN vitals_user_id INTEGER"))
+            if "vitals_recorded_at" not in att_cols:
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN vitals_recorded_at DATETIME"))
     except Exception:
         pass
 
@@ -65,6 +75,10 @@ def migrate_sqlite():
                 conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS responsible_name VARCHAR(180)"))
                 conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS state VARCHAR(2)"))
                 conn.execute(text("ALTER TABLE stock_exits ADD COLUMN IF NOT EXISTS treatment_session_id INTEGER"))
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN IF NOT EXISTS booking_id INTEGER"))
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN IF NOT EXISTS external_prescription TEXT"))
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN IF NOT EXISTS vitals_user_id INTEGER"))
+                conn.execute(text("ALTER TABLE attendances ADD COLUMN IF NOT EXISTS vitals_recorded_at TIMESTAMP"))
     except Exception:
         pass
 
@@ -128,6 +142,7 @@ app.include_router(reports.router)
 app.include_router(attendances.router)
 app.include_router(treatments.router)
 app.include_router(treatments.public_router)
+app.include_router(bookings.router)
 
 @app.get("/")
 def health():

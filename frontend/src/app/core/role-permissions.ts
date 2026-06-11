@@ -15,6 +15,7 @@ export type MenuItem =
   | 'produtos'
   | 'entradas'
   | 'saidas'
+  | 'reservas'
   | 'atendimentos'
   | 'atendimentos_pendentes'
   | 'relatorios'
@@ -36,6 +37,7 @@ const ROLES_WITH_REPORTS: UserRole[] = ALL_ROLES.filter((role) => role !== 'vend
 
 const ATTENDANCE_ROLES: UserRole[] = ['medico', 'enfermeira', 'tecnica_enfermagem'];
 const PENDING_ATTENDANCE_ROLES: UserRole[] = ['enfermeira', 'tecnica_enfermagem'];
+const BOOKING_ROLES: UserRole[] = ['vendedor', 'operacional'];
 
 function hasRole(role: UserRole | null | undefined, allowed: UserRole[]): boolean {
   if (!role) return false;
@@ -74,6 +76,8 @@ export function canShowMenuItem(role: UserRole | null | undefined, item: MenuIte
       return hasRole(role, ['estoque']);
     case 'saidas':
       return hasRole(role, ['estoque', 'operacional', 'enfermeira', 'tecnica_enfermagem']);
+    case 'reservas':
+      return hasRole(role, BOOKING_ROLES);
     case 'atendimentos':
       return hasRole(role, ATTENDANCE_ROLES);
     case 'atendimentos_pendentes':
@@ -195,6 +199,22 @@ export function canFinalizeSession(role: UserRole | null | undefined): boolean {
 
 export function canViewPendingAttendances(role: UserRole | null | undefined): boolean {
   return hasRole(role, PENDING_ATTENDANCE_ROLES);
+}
+
+export function canManageBookings(role: UserRole | null | undefined): boolean {
+  return hasRole(role, BOOKING_ROLES);
+}
+
+export function canEditVitals(role: UserRole | null | undefined): boolean {
+  return hasRole(role, ['enfermeira']);
+}
+
+export function canViewVitalsChart(role: UserRole | null | undefined): boolean {
+  return hasRole(role, ['medico', 'enfermeira']);
+}
+
+export function canPrintExternalPrescription(role: UserRole | null | undefined): boolean {
+  return hasRole(role, ['medico']);
 }
 
 export function canManageUsers(role: UserRole | null | undefined): boolean {

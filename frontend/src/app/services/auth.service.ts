@@ -30,6 +30,10 @@ import {
   canExecuteSession,
   canFinalizeSession,
   canViewPendingAttendances,
+  canManageBookings,
+  canEditVitals,
+  canViewVitalsChart,
+  canPrintExternalPrescription,
   isReadOnlyCadastro,
   roleLabel,
 } from '../core/role-permissions';
@@ -182,6 +186,22 @@ export class AuthService {
 
   canViewPendingAttendances() {
     return canViewPendingAttendances(this.role());
+  }
+
+  canManageBookings() {
+    return canManageBookings(this.role());
+  }
+
+  canEditVitals() {
+    return canEditVitals(this.role());
+  }
+
+  canViewVitalsChart() {
+    return canViewVitalsChart(this.role());
+  }
+
+  canPrintExternalPrescription() {
+    return canPrintExternalPrescription(this.role());
   }
 
   isReadOnlyCadastro() {

@@ -9,6 +9,7 @@ import { EntriesComponent } from './pages/entries/entries.component';
 import { ExitsComponent } from './pages/exits/exits.component';
 import { AttendanceComponent } from './pages/attendance/attendance.component';
 import { AttendancePendingComponent } from './pages/attendance-pending/attendance-pending.component';
+import { BookingsComponent } from './pages/bookings/bookings.component';
 import { TreatmentSessionComponent } from './pages/treatment-session/treatment-session.component';
 import { PublicSignComponent } from './pages/public-sign/public-sign.component';
 import { ReportsComponent } from './pages/reports/reports.component';
@@ -27,6 +28,7 @@ export const routes: Routes = [
   { path: 'produtos', component: ProductsComponent, canActivate: protectedRoute },
   { path: 'entradas', component: EntriesComponent, canActivate: protectedRoute },
   { path: 'saidas', component: ExitsComponent, canActivate: protectedRoute },
+  { path: 'reservas', component: BookingsComponent, canActivate: protectedRoute },
   { path: 'atendimentos', component: AttendanceComponent, canActivate: protectedRoute },
   { path: 'atendimentos-pendentes', component: AttendancePendingComponent, canActivate: protectedRoute },
   { path: 'sessoes/:id', component: TreatmentSessionComponent, canActivate: protectedRoute },

@@ -114,6 +114,8 @@ export class AttendancePendingComponent implements OnInit {
         return 'Aplicar sessão';
       case 'finalizar_sessao':
         return 'Finalizar sessão';
+      case 'registrar_sinais_vitais':
+        return 'Registrar sinais vitais';
       default:
         return action;
     }
@@ -138,6 +140,8 @@ export class AttendancePendingComponent implements OnInit {
         return 'Aguardando enfermagem';
       case 'aguardando_medico':
         return 'Aguardando médico';
+      case 'aguardando_sinais_vitais':
+        return 'Aguardando sinais vitais';
       case 'pendente':
         return 'Pendente de aplicação';
       case 'concluido':

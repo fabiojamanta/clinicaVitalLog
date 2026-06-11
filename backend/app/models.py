@@ -35,6 +35,21 @@ class UserRole(str, enum.Enum):
     tecnica_enfermagem = "tecnica_enfermagem"
     vendedor = "vendedor"
 
+class BookingStatus(str, enum.Enum):
+    agendado = "agendado"
+    presente = "presente"
+    cancelado = "cancelado"
+
+class PaymentType(str, enum.Enum):
+    entrada = "entrada"
+    saldo = "saldo"
+
+class PaymentMethod(str, enum.Enum):
+    pix = "pix"
+    dinheiro = "dinheiro"
+    cartao = "cartao"
+    transferencia = "transferencia"
+
 class Clinic(Base):
     __tablename__ = "clinics"
     id = Column(Integer, primary_key=True)
@@ -166,29 +181,91 @@ class StockExit(Base):
     attendance = relationship("Attendance", back_populates="exits")
     treatment_session = relationship("TreatmentSession", back_populates="exits")
 
+class ConsultationBooking(Base):
+    __tablename__ = "consultation_bookings"
+    id = Column(Integer, primary_key=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
+    patient_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    scheduled_date = Column(Date, nullable=False)
+    total_amount = Column(Numeric(12, 2), nullable=False)
+    deposit_amount = Column(Numeric(12, 2), nullable=False)
+    balance_amount = Column(Numeric(12, 2), nullable=False)
+    status = Column(Enum(BookingStatus), default=BookingStatus.agendado, nullable=False)
+    attendance_id = Column(Integer, ForeignKey("attendances.id"), nullable=True)
+    notes = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    patient = relationship("Client", foreign_keys=[patient_id])
+    attendance = relationship("Attendance", foreign_keys=[attendance_id])
+    created_by_user = relationship("User", foreign_keys=[created_by])
+    payments = relationship("Payment", back_populates="booking")
+
+class Payment(Base):
+    __tablename__ = "payments"
+    id = Column(Integer, primary_key=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
+    booking_id = Column(Integer, ForeignKey("consultation_bookings.id"), nullable=False)
+    payment_type = Column(Enum(PaymentType), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    payment_method = Column(Enum(PaymentMethod), nullable=False)
+    paid_at = Column(DateTime, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    notes = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+    booking = relationship("ConsultationBooking", back_populates="payments")
+    user = relationship("User")
+
 class Attendance(Base):
     __tablename__ = "attendances"
     id = Column(Integer, primary_key=True)
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
     patient_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    booking_id = Column(Integer, ForeignKey("consultation_bookings.id"), nullable=True)
     attendance_date = Column(Date, nullable=False)
     doctor_notes = Column(Text)
     prescription = Column(Text)
+    external_prescription = Column(Text)
     tech_notes = Column(Text)
     nursing_notes = Column(Text)
     doctor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     tech_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     nursing_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    vitals_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     doctor_updated_at = Column(DateTime, nullable=True)
     tech_updated_at = Column(DateTime, nullable=True)
     nursing_updated_at = Column(DateTime, nullable=True)
+    vitals_recorded_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     patient = relationship("Client", foreign_keys=[patient_id])
+    booking = relationship("ConsultationBooking", foreign_keys=[booking_id])
     doctor_user = relationship("User", foreign_keys=[doctor_user_id])
     tech_user = relationship("User", foreign_keys=[tech_user_id])
     nursing_user = relationship("User", foreign_keys=[nursing_user_id])
+    vitals_user = relationship("User", foreign_keys=[vitals_user_id])
     exits = relationship("StockExit", back_populates="attendance")
+    vital_signs = relationship("VitalSign", back_populates="attendance", uselist=False)
+
+class VitalSign(Base):
+    __tablename__ = "vital_signs"
+    id = Column(Integer, primary_key=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
+    patient_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    attendance_id = Column(Integer, ForeignKey("attendances.id"), nullable=False, unique=True)
+    systolic_bp = Column(Integer, nullable=True)
+    diastolic_bp = Column(Integer, nullable=True)
+    heart_rate = Column(Integer, nullable=True)
+    temperature = Column(Numeric(4, 1), nullable=True)
+    weight = Column(Numeric(6, 2), nullable=True)
+    height = Column(Numeric(5, 1), nullable=True)
+    spo2 = Column(Integer, nullable=True)
+    glycemia = Column(Integer, nullable=True)
+    notes = Column(Text)
+    recorded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    recorded_at = Column(DateTime, nullable=False)
+    patient = relationship("Client", foreign_keys=[patient_id])
+    attendance = relationship("Attendance", back_populates="vital_signs")
+    recorder = relationship("User", foreign_keys=[recorded_by])
 
 class Treatment(Base):
     __tablename__ = "treatments"

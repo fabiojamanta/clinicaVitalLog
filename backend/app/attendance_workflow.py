@@ -10,6 +10,10 @@ def has_prescription(att: "Attendance") -> bool:
     return bool((att.prescription or "").strip())
 
 
+def is_vitals_done(att: "Attendance") -> bool:
+    return att.vitals_recorded_at is not None
+
+
 def is_doctor_done(att: "Attendance") -> bool:
     return att.doctor_updated_at is not None
 
@@ -29,6 +33,8 @@ def has_dispensed(att: "Attendance") -> bool:
 def workflow_status(att: "Attendance") -> str:
     if is_nursing_done(att):
         return "concluido"
+    if not is_vitals_done(att):
+        return "aguardando_sinais_vitais"
     if not is_doctor_done(att):
         return "aguardando_medico"
     if has_prescription(att) and not is_tech_done(att):
@@ -38,12 +44,21 @@ def workflow_status(att: "Attendance") -> str:
 
 def pending_items_for_role(att: "Attendance", role: UserRole) -> list[tuple[str, str]]:
     """Retorna lista de (pending_for, pending_action) para o atendimento."""
-    if not is_doctor_done(att) or is_nursing_done(att):
+    if is_nursing_done(att):
         return []
 
     items: list[tuple[str, str]] = []
 
-    # Enfermeira acompanha também o que está pendente para a técnica
+    if role in (UserRole.enfermeira, UserRole.administrador):
+        if not is_vitals_done(att):
+            items.append(("enfermeira", "registrar_sinais_vitais"))
+
+    if not is_vitals_done(att):
+        return items
+
+    if not is_doctor_done(att):
+        return items
+
     if role in (UserRole.tecnica_enfermagem, UserRole.enfermeira, UserRole.administrador):
         if has_prescription(att) and not is_tech_done(att):
             items.append(("tecnica_enfermagem", "tecnica"))
@@ -79,7 +94,6 @@ def session_pending_items_for_role(
 
     items: list[tuple[str, str]] = []
 
-    # Sessão ainda não aplicada: pendente para a técnica (enfermeira também vê/pode executar)
     if status == "pendente" and role in (
         UserRole.tecnica_enfermagem,
         UserRole.enfermeira,
@@ -87,7 +101,6 @@ def session_pending_items_for_role(
     ):
         items.append(("tecnica_enfermagem", "aplicar_sessao"))
 
-    # Sessão aplicada pela técnica: enfermeira precisa finalizar
     if status == "aguardando_enfermagem" and role in (
         UserRole.enfermeira,
         UserRole.administrador,
