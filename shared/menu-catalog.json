@@ -1,0 +1,112 @@
+[
+  {
+    "menu_key": "dashboard",
+    "label": "Dashboard",
+    "route_paths": [
+      "/"
+    ],
+    "nav_group": null,
+    "sort_order": 1
+  },
+  {
+    "menu_key": "fornecedores",
+    "label": "Fornecedores",
+    "route_paths": [
+      "/fornecedores"
+    ],
+    "nav_group": "cadastros",
+    "sort_order": 10
+  },
+  {
+    "menu_key": "clientes",
+    "label": "Clientes",
+    "route_paths": [
+      "/clientes"
+    ],
+    "nav_group": "cadastros",
+    "sort_order": 11
+  },
+  {
+    "menu_key": "produtos",
+    "label": "Produtos",
+    "route_paths": [
+      "/produtos"
+    ],
+    "nav_group": "cadastros",
+    "sort_order": 12
+  },
+  {
+    "menu_key": "entradas",
+    "label": "Entrada",
+    "route_paths": [
+      "/entradas"
+    ],
+    "nav_group": "movimentacao",
+    "sort_order": 20
+  },
+  {
+    "menu_key": "saidas",
+    "label": "Saída",
+    "route_paths": [
+      "/saidas"
+    ],
+    "nav_group": "movimentacao",
+    "sort_order": 21
+  },
+  {
+    "menu_key": "reservas",
+    "label": "Reservas",
+    "route_paths": [
+      "/reservas"
+    ],
+    "nav_group": "atendimentos",
+    "sort_order": 30
+  },
+  {
+    "menu_key": "atendimentos",
+    "label": "Consulta",
+    "route_paths": [
+      "/atendimentos",
+      "/sessoes/:id"
+    ],
+    "nav_group": "atendimentos",
+    "sort_order": 31
+  },
+  {
+    "menu_key": "atendimentos_pendentes",
+    "label": "Pendências",
+    "route_paths": [
+      "/atendimentos-pendentes"
+    ],
+    "nav_group": "atendimentos",
+    "sort_order": 32
+  },
+  {
+    "menu_key": "relatorios",
+    "label": "Relatórios",
+    "route_paths": [
+      "/relatorios",
+      "/relatorios/:kind"
+    ],
+    "nav_group": null,
+    "sort_order": 40
+  },
+  {
+    "menu_key": "usuarios",
+    "label": "Usuários",
+    "route_paths": [
+      "/usuarios"
+    ],
+    "nav_group": "configuracoes",
+    "sort_order": 50
+  },
+  {
+    "menu_key": "auditoria",
+    "label": "Auditoria",
+    "route_paths": [
+      "/auditoria"
+    ],
+    "nav_group": "configuracoes",
+    "sort_order": 51
+  }
+]

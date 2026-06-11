@@ -1,15 +1,16 @@
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
+import re
 from datetime import date, datetime
 from typing import Optional, Any
 from .models import (
     ProductType,
     ClientType,
-    UserRole,
     MovementStatus,
     ExitType,
     BookingStatus,
     PaymentType,
     PaymentMethod,
+    AccessLevel,
 )
 from .datetime_utils import format_datetime_br_iso
 
@@ -19,38 +20,100 @@ class Token(BaseModel):
     user: dict
 
 class Login(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=160)
+    password: str = Field(min_length=1, max_length=128)
+
+class ProfileCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    slug: str = Field(min_length=2, max_length=40)
+    clinical_slug: Optional[str] = Field(default=None, max_length=40)
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: str) -> str:
+        slug = v.strip().lower()
+        if not re.match(r"^[a-z][a-z0-9_]{1,39}$", slug):
+            raise ValueError("Slug inválido")
+        return slug
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    slug: Optional[str] = Field(default=None, min_length=2, max_length=40)
+    clinical_slug: Optional[str] = Field(default=None, max_length=40)
+    active: Optional[bool] = None
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        slug = v.strip().lower()
+        if not re.match(r"^[a-z][a-z0-9_]{1,39}$", slug):
+            raise ValueError("Slug inválido")
+        return slug
 
 class UserBase(BaseModel):
     name: str
     email: str
-    cargo: Optional[str] = None
     phone: Optional[str] = None
-    role: UserRole = UserRole.operacional
+    profile_id: int
     active: bool = True
 
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if not re.match(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$", v):
+            raise ValueError("Senha deve conter letras e números (mín. 8 caracteres)")
+        return v
 
 class UserUpdate(BaseModel):
     name: str
     email: str
-    cargo: Optional[str] = None
     phone: Optional[str] = None
-    role: UserRole = UserRole.operacional
+    profile_id: int
     active: bool = True
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return None
+        if not re.match(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$", v):
+            raise ValueError("Senha deve conter letras e números (mín. 8 caracteres)")
+        return v
 
 class UserRead(UserBase):
     id: int
     clinic_id: int
+    profile_name: Optional[str] = None
     created_at: Optional[datetime] = None
     class Config: from_attributes = True
 
     @field_serializer('created_at')
     def serialize_created_at(self, value: datetime | None) -> str | None:
         return format_datetime_br_iso(value)
+
+class ProfileRead(BaseModel):
+    id: int
+    name: str
+    slug: str
+    is_system: bool = False
+    is_admin: bool = False
+    clinical_slug: Optional[str] = None
+    active: bool = True
+    user_count: Optional[int] = None
+    class Config: from_attributes = True
+
+class ProfilePermissionItem(BaseModel):
+    menu_key: str
+    access_level: AccessLevel
+
+class ProfilePermissionsUpdate(BaseModel):
+    permissions: list[ProfilePermissionItem]
 
 class SupplierBase(BaseModel):
     name: str
@@ -428,6 +491,13 @@ class PublicSignExitItem(BaseModel):
     quantity: int
     unit: Optional[str] = None
 
+class PublicSignPreview(BaseModel):
+    clinic_name: str
+    session_number: int
+    total_sessions: int
+    session_date: Optional[date] = None
+    ready_to_sign: bool = True
+
 class PublicSignInfo(BaseModel):
     patient_name: str
     session_number: int
@@ -438,7 +508,8 @@ class PublicSignInfo(BaseModel):
     exits: list[PublicSignExitItem] = []
 
 class PublicSignCreate(BaseModel):
-    signature: str
+    signature: str = Field(min_length=20, max_length=700_000)
+    pin: Optional[str] = Field(default=None, max_length=12)
 
 class AuditRead(BaseModel):
     id: int

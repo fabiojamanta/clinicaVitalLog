@@ -26,7 +26,7 @@ import { AuthService } from '../../services/auth.service';
   }
 </app-page-header>
 @if(error && !modalOpen){<div class="error">{{error}}</div>}
-@if(auth.isReadOnlyCadastro()){<div class="readonly-banner">Perfil Consulta: visualização apenas. Cadastro e edição não estão disponíveis.</div>}
+@if(auth.isReadOnlyMenu('fornecedores')){<div class="readonly-banner">Acesso somente consulta nesta tela. Inclusão e alteração não estão disponíveis.</div>}
 
 <app-form-modal [open]="modalOpen" [title]="modalTitle()" (close)="closeModal()">
   @if(error){<div class="error">{{error}}</div>}

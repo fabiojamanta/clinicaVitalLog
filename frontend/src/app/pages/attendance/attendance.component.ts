@@ -7,6 +7,7 @@ import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
 import { VitalsChartComponent, VitalSignPoint } from '../../shared/vitals-chart.component';
+import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 
 type TreatmentSessionItem = {
   id: number;
@@ -106,10 +107,11 @@ type Attendance = {
 @Component({
   selector: 'app-attendance',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, VitalsChartComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, VitalsChartComponent, ReadonlyBannerComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Atendimento ao paciente</h1><p>Fluxo: sinais vitais → consulta médica → sessões de tratamento.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
+<app-readonly-banner [show]="auth.isReadOnlyMenu('atendimentos')"></app-readonly-banner>
 
 <div class="card grid grid-3">
   <div>
@@ -123,9 +125,11 @@ type Attendance = {
     <label>Data do atendimento</label>
     <input type="date" [(ngModel)]="newDate">
   </div>
+  @if(auth.canWriteMenu('atendimentos')){
   <div class="form-actions">
     <button type="button" class="btn" [disabled]="!selectedPatientId" (click)="openAttendance()">Abrir atendimento</button>
   </div>
+  }
 </div>
 
 @if(selectedPatientId){

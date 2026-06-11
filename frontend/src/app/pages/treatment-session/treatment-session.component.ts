@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { SignaturePadComponent } from '../../shared/signature-pad.component';
+import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 
 type SessionExit = {
   id: number;
@@ -44,8 +45,9 @@ type TreatmentSession = {
 @Component({
   selector: 'app-treatment-session',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe, SignaturePadComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, SignaturePadComponent, ReadonlyBannerComponent],
   template: `
+<app-readonly-banner [show]="auth.isReadOnlyMenu('atendimentos')"></app-readonly-banner>
 <div class="top">
   <div class="page-title">
     <h1>Sessão de tratamento</h1>

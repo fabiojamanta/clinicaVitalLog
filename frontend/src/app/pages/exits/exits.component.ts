@@ -5,6 +5,7 @@ import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
+import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 
 const WRITE_OFF_CLIENT_NAME = 'Baixa de estoque / Descarte';
 
@@ -23,10 +24,11 @@ type EntryLookup = {
 @Component({
   selector: 'app-exits',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe],
+  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Saídas de estoque</h1><p>Controle de retirada por cliente, produto e lote.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
+<app-readonly-banner [show]="auth.isReadOnlyMenu('saidas')"></app-readonly-banner>
 @if(auth.canCreateExit()){
 <div class="card grid grid-3">
   <div><label>Código da entrada</label><input #entryCodeInput [(ngModel)]="entryCode" placeholder="ENT0100000001" (keydown.enter)="lookupEntryCode()">

@@ -6,6 +6,7 @@ import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
+import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 
 type Payment = {
   id: number;
@@ -33,11 +34,13 @@ type Booking = {
 @Component({
   selector: 'app-bookings',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe],
+  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Reservas de consulta</h1><p>Registre reservas telefônicas com entrada de 30% e check-in com pagamento do saldo.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
+<app-readonly-banner [show]="auth.isReadOnlyMenu('reservas')"></app-readonly-banner>
 
+@if(auth.canManageBookings()){
 <div class="card grid grid-3">
   <div>
     <label>Paciente</label>
@@ -79,6 +82,7 @@ type Booking = {
     <button type="button" class="btn" (click)="createBooking()">Registrar reserva e entrada (30%)</button>
   </div>
 </div>
+}
 
 <div class="card grid grid-3">
   <div>
@@ -121,7 +125,7 @@ type Booking = {
           }
         </td>
         <td>
-          @if(b.status==='agendado'){
+          @if(b.status==='agendado' && auth.canManageBookings()){
             <button type="button" class="btn btn-sm" (click)="openCheckIn(b)">Check-in (70%)</button>
             <button type="button" class="btn btn-secondary btn-sm" (click)="cancelBooking(b)">Cancelar</button>
           }@else if(b.status==='presente' && b.attendance_id){

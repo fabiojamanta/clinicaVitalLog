@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING
 
-from .models import MovementStatus, UserRole
+from .models import MovementStatus
 
 if TYPE_CHECKING:
-    from .models import Attendance, TreatmentSession
+    from .models import Attendance, Profile, TreatmentSession
 
 
 def has_prescription(att: "Attendance") -> bool:
@@ -42,14 +42,21 @@ def workflow_status(att: "Attendance") -> str:
     return "aguardando_enfermagem"
 
 
-def pending_items_for_role(att: "Attendance", role: UserRole) -> list[tuple[str, str]]:
-    """Retorna lista de (pending_for, pending_action) para o atendimento."""
+def _is_enfermeira(profile: "Profile") -> bool:
+    return profile.is_admin or profile.clinical_slug == "enfermeira"
+
+
+def _is_tecnica(profile: "Profile") -> bool:
+    return profile.is_admin or profile.clinical_slug == "tecnica_enfermagem"
+
+
+def pending_items_for_role(att: "Attendance", profile: "Profile") -> list[tuple[str, str]]:
     if is_nursing_done(att):
         return []
 
     items: list[tuple[str, str]] = []
 
-    if role in (UserRole.enfermeira, UserRole.administrador):
+    if _is_enfermeira(profile):
         if not is_vitals_done(att):
             items.append(("enfermeira", "registrar_sinais_vitais"))
 
@@ -59,11 +66,11 @@ def pending_items_for_role(att: "Attendance", role: UserRole) -> list[tuple[str,
     if not is_doctor_done(att):
         return items
 
-    if role in (UserRole.tecnica_enfermagem, UserRole.enfermeira, UserRole.administrador):
+    if _is_tecnica(profile) or _is_enfermeira(profile):
         if has_prescription(att) and not is_tech_done(att):
             items.append(("tecnica_enfermagem", "tecnica"))
 
-    if role in (UserRole.enfermeira, UserRole.administrador):
+    if _is_enfermeira(profile):
         if has_prescription(att) and not has_dispensed(att):
             items.append(("enfermeira", "dispensar"))
         if (
@@ -85,26 +92,18 @@ def session_status(session: "TreatmentSession") -> str:
 
 
 def session_pending_items_for_role(
-    session: "TreatmentSession", role: UserRole
+    session: "TreatmentSession", profile: "Profile"
 ) -> list[tuple[str, str]]:
-    """Retorna lista de (pending_for, pending_action) para a sessão de tratamento."""
     status = session_status(session)
     if status == "concluido":
         return []
 
     items: list[tuple[str, str]] = []
 
-    if status == "pendente" and role in (
-        UserRole.tecnica_enfermagem,
-        UserRole.enfermeira,
-        UserRole.administrador,
-    ):
+    if status == "pendente" and (_is_tecnica(profile) or _is_enfermeira(profile)):
         items.append(("tecnica_enfermagem", "aplicar_sessao"))
 
-    if status == "aguardando_enfermagem" and role in (
-        UserRole.enfermeira,
-        UserRole.administrador,
-    ):
+    if status == "aguardando_enfermagem" and _is_enfermeira(profile):
         items.append(("enfermeira", "finalizar_sessao"))
 
     return items

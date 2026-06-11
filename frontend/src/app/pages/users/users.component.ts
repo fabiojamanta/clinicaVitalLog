@@ -5,49 +5,39 @@ import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { FormModalComponent } from '../../shared/form-modal.component';
 import { PhoneBrPipe } from '../../core/phone-br.pipe';
+import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 import { formatPhoneBr, stripDigits } from '../../core/format.util';
 
-const ROLE_LABELS: Record<string, string> = {
-  administrador: 'Administrador',
-  estoque: 'Estoque',
-  operacional: 'Operacional',
-  consulta: 'Consulta',
-  medico: 'Médico',
-  enfermeira: 'Enfermagem',
-  tecnica_enfermagem: 'Técnica de enfermagem',
-  vendedor: 'Vendedor',
-};
+type ProfileOption = { id: number; name: string; slug: string };
 
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, FormModalComponent, PhoneBrPipe],
+  imports: [CommonModule, FormsModule, FormModalComponent, PhoneBrPipe, ReadonlyBannerComponent],
   template: `
 <div class="top">
   <div class="page-head">
     <div class="page-title">
       <h1 class="title-gradient">Usuários</h1>
-      <p>Cadastro de acesso e perfis do sistema.</p>
+      <p>Cadastro de acesso vinculado ao perfil de permissões.</p>
     </div>
   </div>
-  <button type="button" class="btn" (click)="openNew()">Incluir</button>
+  @if(auth.canManageUsers()){
+    <button type="button" class="btn" (click)="openNew()">Incluir</button>
+  }
 </div>
 @if(error && !modalOpen){<div class="error">{{error}}</div>}
+<app-readonly-banner [show]="auth.isReadOnlyMenu('usuarios')"></app-readonly-banner>
 
+@if(auth.canManageUsers()){
 <app-form-modal [open]="modalOpen" [title]="modalTitle()" (close)="closeModal()">
   @if(error){<div class="error">{{error}}</div>}
   <div class="grid grid-3">
     <div><label>Nome</label><input [(ngModel)]="form.name"></div>
     <div><label>Email</label><input [(ngModel)]="form.email" type="email"></div>
-    <div><label>Cargo</label><input [(ngModel)]="form.cargo" placeholder="Ex.: Gerente de estoque"></div>
     <div>
       <label>Telefone</label>
-      <input
-        [ngModel]="form.phone"
-        (ngModelChange)="onPhoneChange($event)"
-        inputmode="tel"
-        placeholder="(11) 97604-1558"
-      >
+      <input [ngModel]="form.phone" (ngModelChange)="onPhoneChange($event)" inputmode="tel" placeholder="(11) 97604-1558">
     </div>
     <div>
       <label>Senha</label>
@@ -55,15 +45,9 @@ const ROLE_LABELS: Record<string, string> = {
     </div>
     <div>
       <label>Perfil</label>
-      <select [(ngModel)]="form.role">
-        <option value="administrador">Administrador</option>
-        <option value="estoque">Estoque</option>
-        <option value="operacional">Operacional</option>
-        <option value="consulta">Consulta</option>
-        <option value="medico">Médico</option>
-        <option value="enfermeira">Enfermagem</option>
-        <option value="tecnica_enfermagem">Técnica de enfermagem</option>
-        <option value="vendedor">Vendedor</option>
+      <select [(ngModel)]="form.profile_id">
+        <option [ngValue]="0">Selecione</option>
+        @for(p of profileOptions; track p.id){<option [ngValue]="p.id">{{p.name}}</option>}
       </select>
     </div>
     <div>
@@ -79,24 +63,20 @@ const ROLE_LABELS: Record<string, string> = {
     </div>
   </div>
 </app-form-modal>
+}
 
 <div class="card table-wrap">
   <table>
     <thead>
-      <tr><th>Nome</th><th>Email</th><th>Cargo</th><th>Telefone</th><th>Perfil</th><th>Ativo</th></tr>
+      <tr><th>Nome</th><th>Email</th><th>Telefone</th><th>Perfil</th><th>Ativo</th></tr>
     </thead>
     <tbody>
       @for(i of rows; track i.id){
-        <tr
-          class="clickable"
-          [class.selected]="modalOpen && editingId===i.id"
-          (click)="edit(i)"
-        >
+        <tr class="clickable" [class.selected]="modalOpen && editingId===i.id" (click)="edit(i)">
           <td>{{i.name}}</td>
           <td>{{i.email}}</td>
-          <td>{{i.cargo || '—'}}</td>
           <td>{{i.phone | phoneBr}}</td>
-          <td>{{roleLabel(i.role)}}</td>
+          <td>{{i.profile_name || '—'}}</td>
           <td><span class="badge" [class.ok]="i.active" [class.danger]="!i.active">{{i.active ? 'Sim' : 'Não'}}</span></td>
         </tr>
       }
@@ -106,18 +86,11 @@ const ROLE_LABELS: Record<string, string> = {
 })
 export class UsersComponent implements OnInit {
   rows: any[] = [];
+  profileOptions: ProfileOption[] = [];
   editingId: number | null = null;
   modalOpen = false;
   error = '';
-  form: any = {
-    name: '',
-    email: '',
-    cargo: '',
-    phone: '',
-    password: '',
-    role: 'operacional',
-    active: true,
-  };
+  form: any = { name: '', email: '', phone: '', password: '', profile_id: 0, active: true };
 
   constructor(
     private api: ApiService,
@@ -125,15 +98,12 @@ export class UsersComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.api.get<ProfileOption[]>('/profiles/active').subscribe((r) => (this.profileOptions = r));
     this.load();
   }
 
   modalTitle() {
     return this.editingId ? 'Editar usuário' : 'Incluir usuário';
-  }
-
-  roleLabel(role: string) {
-    return ROLE_LABELS[role] || role;
   }
 
   onPhoneChange(value: string) {
@@ -145,19 +115,20 @@ export class UsersComponent implements OnInit {
   }
 
   openNew() {
+    if (!this.auth.canManageUsers()) return;
     this.resetForm();
     this.modalOpen = true;
   }
 
   edit(row: any) {
+    if (!this.auth.canManageUsers()) return;
     this.editingId = row.id;
     this.form = {
       name: row.name ?? '',
       email: row.email ?? '',
-      cargo: row.cargo ?? '',
       phone: formatPhoneBr(row.phone),
       password: '',
-      role: row.role ?? 'operacional',
+      profile_id: row.profile_id ?? 0,
       active: row.active ?? true,
     };
     this.error = '';
@@ -171,20 +142,17 @@ export class UsersComponent implements OnInit {
 
   resetForm() {
     this.editingId = null;
-    this.form = {
-      name: '',
-      email: '',
-      cargo: '',
-      phone: '',
-      password: '',
-      role: 'operacional',
-      active: true,
-    };
+    this.form = { name: '', email: '', phone: '', password: '', profile_id: 0, active: true };
     this.error = '';
   }
 
   save() {
+    if (!this.auth.canManageUsers()) return;
     this.error = '';
+    if (!this.form.profile_id) {
+      this.error = 'Selecione o perfil';
+      return;
+    }
     if (!this.editingId && !this.form.password?.trim()) {
       this.error = 'Informe a senha do novo usuário';
       return;
@@ -192,9 +160,8 @@ export class UsersComponent implements OnInit {
     const payload = {
       name: this.form.name,
       email: this.form.email,
-      cargo: this.form.cargo?.trim() || null,
       phone: stripDigits(this.form.phone) || null,
-      role: this.form.role,
+      profile_id: this.form.profile_id,
       active: this.form.active,
       password: this.form.password?.trim() || null,
     };
@@ -202,10 +169,7 @@ export class UsersComponent implements OnInit {
       ? this.api.put(`/users/${this.editingId}`, payload)
       : this.api.post('/users', { ...payload, password: this.form.password });
     req.subscribe({
-      next: () => {
-        this.closeModal();
-        this.load();
-      },
+      next: () => { this.closeModal(); this.load(); },
       error: (e) => (this.error = e.error?.detail || 'Erro ao salvar usuário'),
     });
   }

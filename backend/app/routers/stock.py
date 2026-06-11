@@ -9,9 +9,11 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from ..database import get_db
-from ..models import Product, Lot, StockEntry, StockExit, MovementStatus, ExitType, User, UserRole, AuditLog, Client
+from ..models import Product, Lot, StockEntry, StockExit, MovementStatus, ExitType, User, AuditLog, Client, AccessLevel
 from ..schemas import EntryCreate, EntryRead, EntryLookupRead, ExitCreate, ExitRead, CancelExit, CancelEntry, AuditRead
-from ..deps import get_current_user, require_roles, log_action
+from ..deps import get_current_user, log_action
+from ..permissions import require_menu_access, user_is_admin, get_user_permissions, has_menu_access
+from ..tenant import assert_attendance_in_clinic, assert_client_in_clinic
 from ..entry_code import generate_entry_code, normalize_entry_code
 from ..label_pdf import build_entry_label_pdf
 from ..config import settings
@@ -61,7 +63,7 @@ def _exit_to_read(row: StockExit) -> ExitRead:
     )
 
 @router.get("/dashboard")
-def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def dashboard(db: Session = Depends(get_db), user: User = Depends(require_menu_access("dashboard", AccessLevel.read))):
     today = today_br()
     products = db.query(Product).filter(Product.clinic_id == user.clinic_id, Product.active == True).all()
     low_stock = []
@@ -88,13 +90,19 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
     }
 
 @router.get("/entries", response_model=list[EntryRead])
-def list_entries(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_entries(db: Session = Depends(get_db), user: User = Depends(require_menu_access("entradas", AccessLevel.read))):
     rows = db.query(StockEntry).filter(StockEntry.clinic_id == user.clinic_id).order_by(StockEntry.entry_date.desc(), StockEntry.id.desc()).all()
     return [_entry_to_read(r) for r in rows]
 
 
 @router.get("/entries/by-code/{code}", response_model=EntryLookupRead)
 def lookup_entry_by_code(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    perms = get_user_permissions(db, user)
+    if not (
+        has_menu_access(perms, "entradas", AccessLevel.read, user_is_admin(user))
+        or has_menu_access(perms, "saidas", AccessLevel.read, user_is_admin(user))
+    ):
+        raise HTTPException(403, "Acesso negado")
     normalized = normalize_entry_code(code)
     if not normalized:
         raise HTTPException(404, "Código de entrada não encontrado")
@@ -122,7 +130,7 @@ def lookup_entry_by_code(code: str, db: Session = Depends(get_db), user: User = 
     )
 
 @router.post("/entries", response_model=EntryRead)
-def create_entry(payload: EntryCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque))):
+def create_entry(payload: EntryCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("entradas", AccessLevel.write))):
     if payload.quantity <= 0: raise HTTPException(400, "Quantidade deve ser maior que zero")
     product = db.query(Product).filter_by(id=payload.product_id, clinic_id=user.clinic_id, active=True).first()
     if not product:
@@ -212,14 +220,14 @@ def cancel_entry(
     payload: CancelEntry,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("entradas", AccessLevel.write)),
 ):
     obj = db.query(StockEntry).filter_by(id=entry_id, clinic_id=user.clinic_id).first()
     if not obj:
         raise HTTPException(404, "Entrada não encontrada")
     if obj.status == MovementStatus.cancelada:
         raise HTTPException(400, "Entrada já cancelada")
-    if obj.user_id != user.id and user.role != UserRole.administrador:
+    if obj.user_id != user.id and not user_is_admin(user):
         raise HTTPException(403, "Apenas quem registrou a entrada ou administrador pode cancelar")
     reason = (payload.cancel_reason or "").strip()
     if not reason:
@@ -259,7 +267,7 @@ def cancel_entry(
 def entry_label_pdf(
     entry_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("entradas", AccessLevel.read)),
 ):
     entry = (
         db.query(StockEntry)
@@ -282,7 +290,7 @@ def entry_label_pdf(
 
 
 @router.get("/exits", response_model=list[ExitRead])
-def list_exits(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_exits(db: Session = Depends(get_db), user: User = Depends(require_menu_access("saidas", AccessLevel.read))):
     rows = db.query(StockExit).filter(StockExit.clinic_id == user.clinic_id).order_by(StockExit.exit_date.desc(), StockExit.id.desc()).all()
     return [_exit_to_read(r) for r in rows]
 
@@ -318,6 +326,10 @@ def perform_stock_exit(
             raise HTTPException(400, "Lote vencido ou bloqueado. Saída não permitida.")
     if quantity > lot.current_stock:
         raise HTTPException(400, "Estoque insuficiente para este lote")
+
+    assert_client_in_clinic(db, client_id, user.clinic_id)
+    if attendance_id:
+        assert_attendance_in_clinic(db, attendance_id, user.clinic_id)
 
     before = {"lot_id": lot.id, "current_stock": lot.current_stock}
     lot.current_stock -= quantity
@@ -365,19 +377,16 @@ def perform_stock_exit(
 
 @router.post("/exits", response_model=ExitRead)
 def create_exit(payload: ExitCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    perms = get_user_permissions(db, user)
+    if not has_menu_access(perms, "saidas", AccessLevel.write, user_is_admin(user)):
+        raise HTTPException(403, "Acesso negado")
     if payload.exit_type == ExitType.baixa_vencido:
-        if user.role not in (UserRole.administrador, UserRole.estoque):
-            raise HTTPException(403, "Baixa de vencido permitida apenas para administrador ou estoque")
         if not (payload.reason or "").strip():
             raise HTTPException(400, "Motivo é obrigatório para baixa de produto vencido")
-    elif user.role not in (
-        UserRole.administrador,
-        UserRole.estoque,
-        UserRole.operacional,
-        UserRole.enfermeira,
-        UserRole.tecnica_enfermagem,
-    ):
-        raise HTTPException(403, "Acesso negado")
+
+    assert_client_in_clinic(db, payload.client_id, user.clinic_id)
+    if payload.attendance_id:
+        assert_attendance_in_clinic(db, payload.attendance_id, user.clinic_id)
 
     obj = perform_stock_exit(
         db,
@@ -397,11 +406,11 @@ def create_exit(payload: ExitCreate, request: Request, db: Session = Depends(get
     return _exit_to_read(obj)
 
 @router.post("/exits/{exit_id}/cancel", response_model=ExitRead)
-def cancel_exit(exit_id: int, payload: CancelExit, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def cancel_exit(exit_id: int, payload: CancelExit, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("saidas", AccessLevel.write))):
     obj = db.query(StockExit).filter_by(id=exit_id, clinic_id=user.clinic_id).first()
     if not obj: raise HTTPException(404, "Saída não encontrada")
     if obj.status == MovementStatus.cancelada: raise HTTPException(400, "Saída já cancelada")
-    if obj.user_id != user.id and user.role != UserRole.administrador:
+    if obj.user_id != user.id and not user_is_admin(user):
         raise HTTPException(403, "Apenas quem gerou a saída ou administrador pode cancelar")
     lot = obj.lot
     before = {"exit_status": obj.status.value, "lot_stock": lot.current_stock}
@@ -417,7 +426,7 @@ def cancel_exit(exit_id: int, payload: CancelExit, request: Request, db: Session
 @router.get("/audit", response_model=list[AuditRead])
 def list_audit(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.administrador)),
+    user: User = Depends(require_menu_access("auditoria", AccessLevel.read)),
     user_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),
     entity: Optional[str] = Query(None),

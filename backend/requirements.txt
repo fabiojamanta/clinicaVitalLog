@@ -12,3 +12,4 @@ python-barcode==0.15.1
 Pillow>=10.0.0
 psycopg2-binary==2.9.10
 tzdata>=2024.1
+slowapi==0.1.9

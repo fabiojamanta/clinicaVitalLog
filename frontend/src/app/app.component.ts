@@ -196,12 +196,21 @@ export class AppComponent implements OnDestroy {
   logout(e: Event) {
     e.preventDefault();
     this.closeMenu();
-    this.auth.logout();
-    this.router.navigateByUrl('/login');
+    this.auth.logout().subscribe({
+      next: () => this.router.navigateByUrl('/login'),
+      error: () => {
+        this.auth.clearLocalSession();
+        this.router.navigateByUrl('/login');
+      },
+    });
   }
 
   private refreshNav() {
-    this.navEntries = filterNavMenu(NAV_MENU, (item) => this.auth.canShowMenuItem(item));
+    this.navEntries = filterNavMenu(
+      NAV_MENU,
+      (item) => this.auth.canShowMenuItem(item),
+      () => this.auth.canManagePermissions(),
+    );
   }
 
   private clearCloseTimer(id: string) {

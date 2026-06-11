@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Supplier, Client, Product, Lot, User, UserRole
+from ..models import Supplier, Client, Product, Lot, User, Profile, AccessLevel
 from ..schemas import SupplierCreate, SupplierRead, ClientCreate, ClientRead, ProductCreate, ProductRead, LotRead, UserCreate, UserUpdate, UserRead
-from ..deps import get_current_user, require_roles, log_action
-from ..security import get_password_hash
+from ..deps import get_current_user, log_action
+from ..permissions import require_menu_access, require_admin
+from ..security import get_password_hash, validate_password_strength
+from ..tenant import assert_supplier_in_clinic
 from datetime import date, timedelta
 from ..datetime_utils import today_br
 from ..format_utils import digits_only
@@ -29,34 +31,73 @@ def _normalize_contact_fields(data: dict) -> dict:
 def _normalize_user_fields(data: dict) -> dict:
     if "phone" in data:
         data["phone"] = digits_only(data.get("phone"))
-    if "cargo" in data and data["cargo"] is not None:
-        data["cargo"] = data["cargo"].strip() or None
     return data
+
+
+def _user_to_read(u: User) -> UserRead:
+    return UserRead(
+        id=u.id,
+        clinic_id=u.clinic_id,
+        name=u.name,
+        email=u.email,
+        phone=u.phone,
+        profile_id=u.profile_id,
+        active=u.active,
+        profile_name=u.profile.name if u.profile else None,
+        created_at=u.created_at,
+    )
+
+
+def _get_profile(db: Session, clinic_id: int, profile_id: int) -> Profile:
+    p = db.query(Profile).filter_by(id=profile_id, clinic_id=clinic_id, active=True).first()
+    if not p:
+        raise HTTPException(400, "Perfil inválido ou inativo")
+    return p
 
 # Usuários
 @router.get("/users", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador))):
-    return db.query(User).filter(User.clinic_id == user.clinic_id).order_by(User.name).all()
+def list_users(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_menu_access("usuarios", AccessLevel.read)),
+):
+    rows = (
+        db.query(User)
+        .options(joinedload(User.profile))
+        .filter(User.clinic_id == user.clinic_id)
+        .order_by(User.name)
+        .all()
+    )
+    return [_user_to_read(r) for r in rows]
 
 @router.post("/users", response_model=UserRead)
-def create_user(payload: UserCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador))):
-    if db.query(User).filter(User.email == payload.email).first():
+def create_user(
+    payload: UserCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_menu_access("usuarios", AccessLevel.write)),
+):
+    if db.query(User).filter(User.clinic_id == user.clinic_id, User.email == payload.email).first():
         raise HTTPException(400, "Email já cadastrado")
+    validate_password_strength(payload.password)
     data = _normalize_user_fields(payload.model_dump())
+    profile = _get_profile(db, user.clinic_id, payload.profile_id)
     obj = User(
         clinic_id=user.clinic_id,
+        profile_id=profile.id,
         name=data["name"],
         email=data["email"],
-        cargo=data.get("cargo"),
         phone=data.get("phone"),
         password_hash=get_password_hash(payload.password),
-        role=payload.role,
         active=payload.active,
     )
     db.add(obj); db.flush()
-    log_action(db, user, "create", "users", obj.id, after={"name": obj.name, "email": obj.email, "cargo": obj.cargo, "phone": obj.phone, "role": obj.role.value}, request=request)
-    db.commit(); db.refresh(obj)
-    return obj
+    log_action(db, user, "create", "users", obj.id, after={
+        "name": obj.name, "email": obj.email, "phone": obj.phone, "profile_id": obj.profile_id,
+    }, request=request)
+    db.commit()
+    db.refresh(obj)
+    obj.profile = profile
+    return _user_to_read(obj)
 
 @router.put("/users/{id}", response_model=UserRead)
 def update_user(
@@ -64,45 +105,50 @@ def update_user(
     payload: UserUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.administrador)),
+    user: User = Depends(require_menu_access("usuarios", AccessLevel.write)),
 ):
-    obj = db.query(User).filter_by(id=id, clinic_id=user.clinic_id).first()
+    obj = db.query(User).options(joinedload(User.profile)).filter_by(id=id, clinic_id=user.clinic_id).first()
     if not obj:
         raise HTTPException(404, "Usuário não encontrado")
-    other = db.query(User).filter(User.email == payload.email, User.id != id).first()
+    other = db.query(User).filter(
+        User.clinic_id == user.clinic_id,
+        User.email == payload.email,
+        User.id != id,
+    ).first()
     if other:
         raise HTTPException(400, "Email já cadastrado")
     before = {c.name: getattr(obj, c.name) for c in obj.__table__.columns if c.name != "password_hash"}
     data = _normalize_user_fields(payload.model_dump())
+    profile = _get_profile(db, user.clinic_id, payload.profile_id)
     obj.name = data["name"]
     obj.email = data["email"]
-    obj.cargo = data.get("cargo")
     obj.phone = data.get("phone")
-    obj.role = payload.role
+    obj.profile_id = profile.id
     obj.active = payload.active
     if payload.password and payload.password.strip():
+        validate_password_strength(payload.password)
         obj.password_hash = get_password_hash(payload.password)
     after = {
         "name": obj.name,
         "email": obj.email,
-        "cargo": obj.cargo,
         "phone": obj.phone,
-        "role": obj.role.value,
+        "profile_id": obj.profile_id,
         "active": obj.active,
         "password_changed": bool(payload.password and payload.password.strip()),
     }
     log_action(db, user, "update", "users", obj.id, before=before, after=after, request=request)
     db.commit()
     db.refresh(obj)
-    return obj
+    obj.profile = profile
+    return _user_to_read(obj)
 
 # Fornecedores
 @router.get("/suppliers", response_model=list[SupplierRead])
-def list_suppliers(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_suppliers(db: Session = Depends(get_db), user: User = Depends(require_menu_access("fornecedores", AccessLevel.read))):
     return db.query(Supplier).filter(Supplier.clinic_id == user.clinic_id).order_by(Supplier.name).all()
 
 @router.post("/suppliers", response_model=SupplierRead)
-def create_supplier(payload: SupplierCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque))):
+def create_supplier(payload: SupplierCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("fornecedores", AccessLevel.write))):
     data = _normalize_contact_fields(payload.model_dump())
     obj = Supplier(clinic_id=user.clinic_id, **data)
     db.add(obj); db.flush()
@@ -111,7 +157,7 @@ def create_supplier(payload: SupplierCreate, request: Request, db: Session = Dep
     return obj
 
 @router.put("/suppliers/{id}", response_model=SupplierRead)
-def update_supplier(id: int, payload: SupplierCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque))):
+def update_supplier(id: int, payload: SupplierCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("fornecedores", AccessLevel.write))):
     obj = db.query(Supplier).filter_by(id=id, clinic_id=user.clinic_id).first()
     if not obj: raise HTTPException(404, "Fornecedor não encontrado")
     before = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
@@ -124,11 +170,11 @@ def update_supplier(id: int, payload: SupplierCreate, request: Request, db: Sess
 
 # Clientes
 @router.get("/clients", response_model=list[ClientRead])
-def list_clients(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_clients(db: Session = Depends(get_db), user: User = Depends(require_menu_access("clientes", AccessLevel.read))):
     return db.query(Client).filter(Client.clinic_id == user.clinic_id).order_by(Client.name).all()
 
 @router.post("/clients", response_model=ClientRead)
-def create_client(payload: ClientCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque, UserRole.operacional))):
+def create_client(payload: ClientCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("clientes", AccessLevel.write))):
     data = _normalize_contact_fields(payload.model_dump())
     obj = Client(clinic_id=user.clinic_id, **data)
     db.add(obj); db.flush()
@@ -137,7 +183,7 @@ def create_client(payload: ClientCreate, request: Request, db: Session = Depends
     return obj
 
 @router.put("/clients/{id}", response_model=ClientRead)
-def update_client(id: int, payload: ClientCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque))):
+def update_client(id: int, payload: ClientCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("clientes", AccessLevel.write))):
     obj = db.query(Client).filter_by(id=id, clinic_id=user.clinic_id).first()
     if not obj: raise HTTPException(404, "Cliente não encontrado")
     before = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
@@ -150,7 +196,7 @@ def update_client(id: int, payload: ClientCreate, request: Request, db: Session 
 
 # Produtos
 @router.get("/products", response_model=list[ProductRead])
-def list_products(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_products(db: Session = Depends(get_db), user: User = Depends(require_menu_access("produtos", AccessLevel.read))):
     products = db.query(Product).filter(Product.clinic_id == user.clinic_id).order_by(Product.name).all()
     result = []
     for p in products:
@@ -162,7 +208,8 @@ def list_products(db: Session = Depends(get_db), user: User = Depends(get_curren
     return result
 
 @router.post("/products", response_model=ProductRead)
-def create_product(payload: ProductCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque))):
+def create_product(payload: ProductCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("produtos", AccessLevel.write))):
+    assert_supplier_in_clinic(db, payload.supplier_id, user.clinic_id)
     obj = Product(clinic_id=user.clinic_id, **payload.model_dump())
     db.add(obj); db.flush()
     log_action(db, user, "create", "products", obj.id, after=payload.model_dump(), request=request)
@@ -172,9 +219,10 @@ def create_product(payload: ProductCreate, request: Request, db: Session = Depen
     return out
 
 @router.put("/products/{id}", response_model=ProductRead)
-def update_product(id: int, payload: ProductCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.administrador, UserRole.estoque))):
+def update_product(id: int, payload: ProductCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_menu_access("produtos", AccessLevel.write))):
     obj = db.query(Product).filter_by(id=id, clinic_id=user.clinic_id).first()
     if not obj: raise HTTPException(404, "Produto não encontrado")
+    assert_supplier_in_clinic(db, payload.supplier_id, user.clinic_id)
     before = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
     for k,v in payload.model_dump().items(): setattr(obj,k,v)
     log_action(db, user, "update", "products", obj.id, before=before, after=payload.model_dump(), request=request)
@@ -190,7 +238,7 @@ def list_lots(
     include_expired: bool = False,
     expired_only: bool = False,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("produtos", AccessLevel.read)),
 ):
     rows = db.query(Lot).filter(Lot.clinic_id == user.clinic_id, Lot.active == True).order_by(Lot.expiration_date).all()
     today = today_br()

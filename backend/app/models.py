@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Text, Enum, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Text, Enum, Numeric, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -25,15 +25,10 @@ class ExitType(str, enum.Enum):
     consumo = "consumo"
     baixa_vencido = "baixa_vencido"
 
-class UserRole(str, enum.Enum):
-    administrador = "administrador"
-    estoque = "estoque"
-    operacional = "operacional"
-    consulta = "consulta"
-    medico = "medico"
-    enfermeira = "enfermeira"
-    tecnica_enfermagem = "tecnica_enfermagem"
-    vendedor = "vendedor"
+class AccessLevel(str, enum.Enum):
+    hidden = "hidden"
+    read = "read"
+    write = "write"
 
 class BookingStatus(str, enum.Enum):
     agendado = "agendado"
@@ -58,19 +53,62 @@ class Clinic(Base):
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
-class User(Base):
-    __tablename__ = "users"
+class Profile(Base):
+    __tablename__ = "profiles"
     id = Column(Integer, primary_key=True)
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
+    name = Column(String(120), nullable=False)
+    slug = Column(String(80), nullable=False, index=True)
+    is_system = Column(Boolean, default=False, nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    clinical_slug = Column(String(40), nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    permissions = relationship("ProfilePermission", back_populates="profile", cascade="all, delete-orphan")
+    users = relationship("User", back_populates="profile")
+
+class MenuItemRecord(Base):
+    __tablename__ = "menu_items"
+    menu_key = Column(String(60), primary_key=True)
+    label = Column(String(120), nullable=False)
+    route_paths = Column(Text, nullable=False)
+    nav_group = Column(String(40), nullable=True)
+    sort_order = Column(Integer, default=0)
+    active = Column(Boolean, default=True)
+
+class ProfilePermission(Base):
+    __tablename__ = "profile_permissions"
+    id = Column(Integer, primary_key=True)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=False)
+    menu_key = Column(String(60), ForeignKey("menu_items.menu_key"), nullable=False)
+    access_level = Column(Enum(AccessLevel), default=AccessLevel.hidden, nullable=False)
+    profile = relationship("Profile", back_populates="permissions")
+    menu_item = relationship("MenuItemRecord")
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("clinic_id", "email", name="uq_users_clinic_email"),)
+    id = Column(Integer, primary_key=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, default=1)
+    profile_id = Column(Integer, ForeignKey("profiles.id"), nullable=False)
     name = Column(String(160), nullable=False)
-    email = Column(String(160), unique=True, index=True, nullable=False)
-    cargo = Column(String(120))
+    email = Column(String(160), index=True, nullable=False)
     phone = Column(String(40))
     password_hash = Column(String(255), nullable=False)
-    role = Column(Enum(UserRole), default=UserRole.administrador, nullable=False)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
+    profile = relationship("Profile", back_populates="users")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 class Supplier(Base):
     __tablename__ = "suppliers"

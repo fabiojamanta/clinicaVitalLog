@@ -19,8 +19,8 @@ from ..models import (
     Payment,
     PaymentType,
     User,
-    UserRole,
     VitalSign,
+    AccessLevel,
 )
 from ..schemas import (
     AttendanceCreate,
@@ -35,7 +35,15 @@ from ..schemas import (
     VitalSignRead,
     VitalSignUpdate,
 )
-from ..deps import get_current_user, require_roles, log_action
+from ..deps import get_current_user, log_action
+from ..permissions import (
+    require_menu_access,
+    require_clinical_slug,
+    user_is_admin,
+    user_clinical_slug,
+    get_user_permissions,
+    has_menu_access,
+)
 from ..attendance_workflow import (
     pending_items_for_role,
     session_pending_items_for_role,
@@ -49,12 +57,6 @@ from ..models import Treatment, TreatmentSession
 from ..prescription_pdf import build_external_prescription_pdf
 from .stock import perform_stock_exit, _exit_to_read
 router = APIRouter(tags=["atendimentos"])
-
-ATTENDANCE_ROLES = (UserRole.medico, UserRole.enfermeira, UserRole.tecnica_enfermagem)
-DISPENSE_ROLES = (UserRole.enfermeira, UserRole.tecnica_enfermagem)
-VITALS_ROLES = (UserRole.enfermeira, UserRole.administrador)
-WALKIN_PAYMENT_ROLES = (UserRole.vendedor, UserRole.operacional, UserRole.administrador)
-
 
 def _money(value: float | Decimal) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -167,7 +169,7 @@ def _get_attendance(db: Session, user: User, attendance_id: int) -> Attendance:
 def list_attendances(
     patient_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
     q = db.query(Attendance).filter(Attendance.clinic_id == user.clinic_id)
     if patient_id:
@@ -191,11 +193,8 @@ def list_pending_attendances(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if user.role not in (
-        UserRole.administrador,
-        UserRole.enfermeira,
-        UserRole.tecnica_enfermagem,
-    ):
+    perms = get_user_permissions(db, user)
+    if not has_menu_access(perms, "atendimentos_pendentes", AccessLevel.read, user_is_admin(user)):
         raise HTTPException(403, "Acesso negado")
 
     q = db.query(Attendance).filter(
@@ -208,7 +207,7 @@ def list_pending_attendances(
 
     result: list[AttendancePendingItem] = []
     for att in rows:
-        for pending_for, pending_action in pending_items_for_role(att, user.role):
+        for pending_for, pending_action in pending_items_for_role(att, user.profile):
             result.append(
                 AttendancePendingItem(
                     id=att.id,
@@ -246,7 +245,7 @@ def list_pending_attendances(
             if t.id in seen_pending_treatment:
                 continue
             seen_pending_treatment.add(t.id)
-        for pending_for, pending_action in session_pending_items_for_role(s, user.role):
+        for pending_for, pending_action in session_pending_items_for_role(s, user.profile):
             result.append(
                 AttendancePendingItem(
                     id=t.attendance_id,
@@ -276,11 +275,8 @@ def list_patient_vital_signs(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if user.role not in (
-        UserRole.medico,
-        UserRole.enfermeira,
-        UserRole.administrador,
-    ):
+    perms = get_user_permissions(db, user)
+    if not has_menu_access(perms, "atendimentos", AccessLevel.read, user_is_admin(user)):
         raise HTTPException(403, "Acesso negado")
 
     patient = db.query(Client).filter_by(id=patient_id, clinic_id=user.clinic_id).first()
@@ -304,7 +300,7 @@ def list_patient_vital_signs(
 def get_attendance(
     attendance_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
     att = _get_attendance(db, user, attendance_id)
     return _attendance_to_read(att)
@@ -315,7 +311,7 @@ def create_attendance(
     payload: AttendanceCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*ATTENDANCE_ROLES, *WALKIN_PAYMENT_ROLES)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
     patient = db.query(Client).filter_by(id=payload.patient_id, clinic_id=user.clinic_id).first()
     if not patient:
@@ -345,8 +341,10 @@ def create_attendance(
     db.flush()
 
     if payload.total_amount and payload.total_amount > 0:
-        if user.role not in WALKIN_PAYMENT_ROLES and user.role != UserRole.administrador:
-            raise HTTPException(403, "Sem permissão para registrar pagamento na chegada")
+        perms = get_user_permissions(db, user)
+        if not has_menu_access(perms, "reservas", AccessLevel.write, user_is_admin(user)):
+            if not has_menu_access(perms, "atendimentos", AccessLevel.write, user_is_admin(user)):
+                raise HTTPException(403, "Sem permissão para registrar pagamento na chegada")
         if not payload.payment_method:
             raise HTTPException(400, "Informe a forma de pagamento")
 
@@ -394,9 +392,11 @@ def update_vitals(
     payload: VitalSignUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*VITALS_ROLES)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
     att = _get_attendance(db, user, attendance_id)
+    if not user_is_admin(user) and user_clinical_slug(user) != "enfermeira":
+        raise HTTPException(403, "Apenas enfermagem pode registrar sinais vitais")
     if is_doctor_done(att):
         raise HTTPException(400, "Consulta médica já registrada; sinais vitais bloqueados")
 
@@ -493,8 +493,10 @@ def update_doctor_section(
     payload: AttendanceSectionUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.medico)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    if not user_is_admin(user) and user_clinical_slug(user) != "medico":
+        raise HTTPException(403, "Apenas médico pode salvar consulta")
     return _attendance_to_read(_update_section(db, user, request, attendance_id, "doctor", payload))
 
 
@@ -504,8 +506,10 @@ def update_tech_section(
     payload: AttendanceSectionUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.tecnica_enfermagem)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    if not user_is_admin(user) and user_clinical_slug(user) != "tecnica_enfermagem":
+        raise HTTPException(403, "Apenas técnica pode salvar esta seção")
     return _attendance_to_read(_update_section(db, user, request, attendance_id, "tech", payload))
 
 
@@ -515,8 +519,10 @@ def update_nursing_section(
     payload: AttendanceSectionUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.enfermeira)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    if not user_is_admin(user) and user_clinical_slug(user) != "enfermeira":
+        raise HTTPException(403, "Apenas enfermagem pode finalizar")
     return _attendance_to_read(_update_section(db, user, request, attendance_id, "nursing", payload))
 
 
@@ -524,10 +530,11 @@ def update_nursing_section(
 def external_prescription_pdf(
     attendance_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
     att = _get_attendance(db, user, attendance_id)
-    if user.role not in (UserRole.medico, UserRole.administrador) and att.doctor_user_id != user.id:
+    cs = user_clinical_slug(user)
+    if not user_is_admin(user) and cs != "medico" and att.doctor_user_id != user.id:
         raise HTTPException(403, "Acesso negado")
     if not (att.external_prescription or "").strip():
         raise HTTPException(400, "Receita externa não preenchida")
@@ -548,7 +555,7 @@ def dispense_medication(
     payload: AttendanceDispenseCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*DISPENSE_ROLES)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
     att = _get_attendance(db, user, attendance_id)
     obj = perform_stock_exit(

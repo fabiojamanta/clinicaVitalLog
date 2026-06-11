@@ -1,4 +1,5 @@
 import { MenuItem } from './role-permissions';
+import { PROTECTED_ROUTES } from './route-registry';
 
 export interface NavMenuLink {
   label: string;
@@ -17,52 +18,54 @@ export type NavMenuEntry =
   | ({ type: 'link' } & NavMenuLink)
   | ({ type: 'group' } & NavMenuGroup);
 
-export const NAV_MENU: NavMenuEntry[] = [
-  { type: 'link', label: 'Dashboard', route: '/', menuItem: 'dashboard', exact: true },
-  {
-    type: 'group',
-    id: 'cadastros',
-    label: 'Cadastros',
-    children: [
-      { label: 'Fornecedores', route: '/fornecedores', menuItem: 'fornecedores' },
-      { label: 'Clientes', route: '/clientes', menuItem: 'clientes' },
-      { label: 'Produtos', route: '/produtos', menuItem: 'produtos' },
-    ],
-  },
-  {
-    type: 'group',
-    id: 'movimentacao',
-    label: 'Movimentação',
-    children: [
-      { label: 'Entrada', route: '/entradas', menuItem: 'entradas' },
-      { label: 'Saída', route: '/saidas', menuItem: 'saidas' },
-    ],
-  },
-  { type: 'link', label: 'Relatórios', route: '/relatorios', menuItem: 'relatorios' },
-  {
-    type: 'group',
-    id: 'configuracoes',
-    label: 'Configurações',
-    children: [
-      { label: 'Usuários', route: '/usuarios', menuItem: 'usuarios' },
-      { label: 'Auditoria', route: '/auditoria', menuItem: 'auditoria' },
-    ],
-  },
-  {
-    type: 'group',
-    id: 'atendimentos',
-    label: 'Atendimentos',
-    children: [
-      { label: 'Reservas', route: '/reservas', menuItem: 'reservas' },
-      { label: 'Consulta', route: '/atendimentos', menuItem: 'atendimentos' },
-      { label: 'Pendências', route: '/atendimentos-pendentes', menuItem: 'atendimentos_pendentes' },
-    ],
-  },
-];
+const GROUP_LABELS: Record<string, string> = {
+  cadastros: 'Cadastros',
+  movimentacao: 'Movimentação',
+  atendimentos: 'Atendimentos',
+  configuracoes: 'Configurações',
+};
+
+function buildNavMenu(): NavMenuEntry[] {
+  const entries: NavMenuEntry[] = [];
+  const dash = PROTECTED_ROUTES.find((r) => r.menuKey === 'dashboard');
+  if (dash) {
+    entries.push({ type: 'link', label: dash.label, route: dash.path, menuItem: 'dashboard', exact: true });
+  }
+
+  const rel = PROTECTED_ROUTES.find((r) => r.path === '/relatorios');
+  const groups = new Map<string, NavMenuLink[]>();
+
+  for (const r of PROTECTED_ROUTES) {
+    if (!r.navGroup || r.path.includes(':')) continue;
+    if (['dashboard', '/relatorios'].includes(r.path)) continue;
+    const item: NavMenuLink = {
+      label: r.label,
+      route: r.path,
+      menuItem: r.menuKey as MenuItem,
+      exact: r.exact,
+    };
+    const list = groups.get(r.navGroup) ?? [];
+    list.push(item);
+    groups.set(r.navGroup, list);
+  }
+
+  for (const [id, children] of groups) {
+    entries.push({ type: 'group', id, label: GROUP_LABELS[id] ?? id, children });
+  }
+
+  if (rel) {
+    entries.push({ type: 'link', label: rel.label, route: rel.path, menuItem: 'relatorios' });
+  }
+
+  return entries;
+}
+
+export const NAV_MENU: NavMenuEntry[] = buildNavMenu();
 
 export function filterNavMenu(
   menu: NavMenuEntry[],
   canShow: (item: MenuItem) => boolean,
+  canManagePermissions?: () => boolean,
 ): NavMenuEntry[] {
   const result: NavMenuEntry[] = [];
   for (const entry of menu) {
@@ -70,8 +73,14 @@ export function filterNavMenu(
       if (canShow(entry.menuItem)) result.push(entry);
       continue;
     }
-    const hasVisibleChild = entry.children.some((child) => canShow(child.menuItem));
-    if (hasVisibleChild) result.push(entry);
+    let children = entry.children.filter((child) => canShow(child.menuItem));
+    if (entry.id === 'configuracoes' && canManagePermissions?.()) {
+      children = [
+        ...children,
+        { label: 'Permissões', route: '/permissoes', menuItem: 'usuarios' as MenuItem },
+      ];
+    }
+    if (children.length) result.push({ ...entry, children });
   }
   return result;
 }

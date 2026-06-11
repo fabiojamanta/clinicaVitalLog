@@ -1,12 +1,14 @@
-export type UserRole =
-  | 'administrador'
-  | 'estoque'
-  | 'operacional'
-  | 'consulta'
-  | 'medico'
-  | 'enfermeira'
-  | 'tecnica_enfermagem'
-  | 'vendedor';
+import { menuKeyForPath } from './route-registry';
+
+export type AccessLevel = 'hidden' | 'read' | 'write';
+
+export type UserProfile = {
+  id: number;
+  name: string;
+  slug: string;
+  is_admin: boolean;
+  clinical_slug?: string | null;
+};
 
 export type MenuItem =
   | 'dashboard'
@@ -22,232 +24,152 @@ export type MenuItem =
   | 'usuarios'
   | 'auditoria';
 
-const ALL_ROLES: UserRole[] = [
-  'administrador',
-  'estoque',
-  'operacional',
-  'consulta',
-  'medico',
-  'enfermeira',
-  'tecnica_enfermagem',
-  'vendedor',
-];
+export type PermissionMap = Partial<Record<MenuItem, AccessLevel>>;
 
-const ROLES_WITH_REPORTS: UserRole[] = ALL_ROLES.filter((role) => role !== 'vendedor');
-
-const ATTENDANCE_ROLES: UserRole[] = ['medico', 'enfermeira', 'tecnica_enfermagem'];
-const PENDING_ATTENDANCE_ROLES: UserRole[] = ['enfermeira', 'tecnica_enfermagem'];
-const BOOKING_ROLES: UserRole[] = ['vendedor', 'operacional'];
-
-function hasRole(role: UserRole | null | undefined, allowed: UserRole[]): boolean {
-  if (!role) return false;
-  if (role === 'administrador') return true;
-  return allowed.includes(role);
+function isAdmin(profile: UserProfile | null | undefined): boolean {
+  return !!profile?.is_admin;
 }
 
-export function normalizeRole(value: unknown): UserRole | null {
-  if (
-    value === 'administrador' ||
-    value === 'estoque' ||
-    value === 'operacional' ||
-    value === 'consulta' ||
-    value === 'medico' ||
-    value === 'enfermeira' ||
-    value === 'tecnica_enfermagem' ||
-    value === 'vendedor'
-  ) {
-    return value;
-  }
-  return null;
+function level(profile: UserProfile | null | undefined, perms: PermissionMap, menu: MenuItem): AccessLevel {
+  if (isAdmin(profile)) return 'write';
+  return perms[menu] ?? 'hidden';
 }
 
-export function canShowMenuItem(role: UserRole | null | undefined, item: MenuItem): boolean {
-  switch (item) {
-    case 'dashboard':
-      return hasRole(role, ALL_ROLES);
-    case 'relatorios':
-      return hasRole(role, ROLES_WITH_REPORTS);
-    case 'fornecedores':
-    case 'produtos':
-      return hasRole(role, ['estoque', 'consulta']);
-    case 'clientes':
-      return hasRole(role, ['estoque', 'operacional', 'consulta']);
-    case 'entradas':
-      return hasRole(role, ['estoque']);
-    case 'saidas':
-      return hasRole(role, ['estoque', 'operacional', 'enfermeira', 'tecnica_enfermagem']);
-    case 'reservas':
-      return hasRole(role, BOOKING_ROLES);
-    case 'atendimentos':
-      return hasRole(role, ATTENDANCE_ROLES);
-    case 'atendimentos_pendentes':
-      return hasRole(role, PENDING_ATTENDANCE_ROLES);
-    case 'usuarios':
-    case 'auditoria':
-      return hasRole(role, ['administrador']);
-    default:
-      return false;
-  }
+export function canShowMenuItem(
+  profile: UserProfile | null | undefined,
+  perms: PermissionMap,
+  item: MenuItem,
+): boolean {
+  return level(profile, perms, item) !== 'hidden';
 }
 
-export function canAccessRoute(role: UserRole | null | undefined, path: string): boolean {
+export function canReadMenu(
+  profile: UserProfile | null | undefined,
+  perms: PermissionMap,
+  item: MenuItem,
+): boolean {
+  const l = level(profile, perms, item);
+  return l === 'read' || l === 'write';
+}
+
+export function canWriteMenu(
+  profile: UserProfile | null | undefined,
+  perms: PermissionMap,
+  item: MenuItem,
+): boolean {
+  return level(profile, perms, item) === 'write';
+}
+
+export function isReadOnlyMenu(
+  profile: UserProfile | null | undefined,
+  perms: PermissionMap,
+  item: MenuItem,
+): boolean {
+  if (isAdmin(profile)) return false;
+  return level(profile, perms, item) === 'read';
+}
+
+export function canAccessRoute(
+  profile: UserProfile | null | undefined,
+  perms: PermissionMap,
+  path: string,
+): boolean {
   const p = path.split('?')[0];
-  if (p === '/' || p === '') return hasRole(role, ALL_ROLES);
-  if (p.startsWith('/relatorios')) return hasRole(role, ROLES_WITH_REPORTS);
-  if (p === '/fornecedores' || p === '/produtos') {
-    return hasRole(role, ['estoque', 'consulta']);
-  }
-  if (p === '/clientes') {
-    return hasRole(role, ['estoque', 'operacional', 'consulta']);
-  }
-  if (p === '/entradas') return hasRole(role, ['estoque']);
-  if (p === '/saidas') return hasRole(role, ['estoque', 'operacional', 'enfermeira', 'tecnica_enfermagem']);
-  if (p === '/atendimentos') return hasRole(role, ATTENDANCE_ROLES);
-  if (p === '/atendimentos-pendentes') return hasRole(role, PENDING_ATTENDANCE_ROLES);
-  if (p.startsWith('/sessoes')) return hasRole(role, ATTENDANCE_ROLES);
-  if (p === '/usuarios' || p === '/auditoria') return hasRole(role, ['administrador']);
-  return true;
+  if (p === '/permissoes') return isAdmin(profile);
+  const mk = menuKeyForPath(p);
+  if (!mk) return true;
+  return canShowMenuItem(profile, perms, mk as MenuItem);
 }
 
-export function canCreateSupplier(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
+export function canCreateSupplier(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'fornecedores');
+}
+export function canUpdateSupplier(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'fornecedores');
+}
+export function canCreateProduct(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'produtos');
+}
+export function canUpdateProduct(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'produtos');
+}
+export function canCreateClient(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'clientes');
+}
+export function canUpdateClient(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'clientes');
+}
+export function canCreateEntry(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'entradas');
+}
+export function canCreateExit(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'saidas');
+}
+export function canWriteOffExpired(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'saidas');
+}
+export function canCancelExit(p: UserProfile | null, perms: PermissionMap, exitUserId: number, currentUserId: number | null) {
+  if (!p || currentUserId == null) return false;
+  if (isAdmin(p)) return true;
+  return exitUserId === currentUserId && canWriteMenu(p, perms, 'saidas');
+}
+export function canCancelEntry(p: UserProfile | null, perms: PermissionMap, entryUserId: number, currentUserId: number | null) {
+  if (!p || currentUserId == null) return false;
+  if (isAdmin(p)) return true;
+  return entryUserId === currentUserId && canWriteMenu(p, perms, 'entradas');
+}
+export function canAccessAttendance(p: UserProfile | null, perms: PermissionMap) {
+  return canShowMenuItem(p, perms, 'atendimentos');
+}
+export function canEditDoctorSection(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'atendimentos') && (isAdmin(p) || p?.clinical_slug === 'medico');
+}
+export function canEditTechSection(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'atendimentos') && (isAdmin(p) || p?.clinical_slug === 'tecnica_enfermagem');
+}
+export function canEditNursingSection(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'atendimentos') && (isAdmin(p) || p?.clinical_slug === 'enfermeira');
+}
+export function canDispenseMedication(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'atendimentos') && (isAdmin(p) || p?.clinical_slug === 'enfermeira' || p?.clinical_slug === 'tecnica_enfermagem');
+}
+export function canCreateTreatment(p: UserProfile | null, perms: PermissionMap) {
+  return canEditDoctorSection(p, perms);
+}
+export function canExecuteSession(p: UserProfile | null, perms: PermissionMap) {
+  return canDispenseMedication(p, perms);
+}
+export function canFinalizeSession(p: UserProfile | null, perms: PermissionMap) {
+  return canEditNursingSection(p, perms);
+}
+export function canViewPendingAttendances(p: UserProfile | null, perms: PermissionMap) {
+  return canShowMenuItem(p, perms, 'atendimentos_pendentes');
+}
+export function canManageBookings(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'reservas');
+}
+export function canEditVitals(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'atendimentos') && (isAdmin(p) || p?.clinical_slug === 'enfermeira');
+}
+export function canViewVitalsChart(p: UserProfile | null, perms: PermissionMap) {
+  return canReadMenu(p, perms, 'atendimentos') && (isAdmin(p) || p?.clinical_slug === 'medico' || p?.clinical_slug === 'enfermeira');
+}
+export function canPrintExternalPrescription(p: UserProfile | null, perms: PermissionMap) {
+  return canEditDoctorSection(p, perms);
+}
+export function canManageUsers(p: UserProfile | null, perms: PermissionMap) {
+  return canWriteMenu(p, perms, 'usuarios');
+}
+export function canViewAudit(p: UserProfile | null, perms: PermissionMap) {
+  return canReadMenu(p, perms, 'auditoria');
+}
+export function canManagePermissions(p: UserProfile | null) {
+  return isAdmin(p);
+}
+export function isReadOnlyCadastro(p: UserProfile | null, perms: PermissionMap, menu: MenuItem) {
+  return isReadOnlyMenu(p, perms, menu);
 }
 
-export function canUpdateSupplier(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
-}
-
-export function canCreateProduct(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
-}
-
-export function canUpdateProduct(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
-}
-
-export function canCreateClient(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque', 'operacional']);
-}
-
-export function canUpdateClient(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
-}
-
-export function canCreateEntry(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
-}
-
-export function canCreateExit(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque', 'operacional']);
-}
-
-export function canWriteOffExpired(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['estoque']);
-}
-
-export function canCancelExit(
-  role: UserRole | null | undefined,
-  exitUserId: number,
-  currentUserId: number | null,
-): boolean {
-  if (!role || currentUserId == null) return false;
-  if (role === 'administrador') return true;
-  return exitUserId === currentUserId;
-}
-
-export function canCancelEntry(
-  role: UserRole | null | undefined,
-  entryUserId: number,
-  currentUserId: number | null,
-): boolean {
-  if (!role || currentUserId == null) return false;
-  if (role === 'administrador') return true;
-  return entryUserId === currentUserId;
-}
-
-export function canAccessAttendance(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ATTENDANCE_ROLES);
-}
-
-export function canEditDoctorSection(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['medico']);
-}
-
-export function canEditTechSection(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['tecnica_enfermagem']);
-}
-
-export function canEditNursingSection(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['enfermeira']);
-}
-
-export function canDispenseMedication(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['enfermeira', 'tecnica_enfermagem']);
-}
-
-export function canCreateTreatment(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['medico']);
-}
-
-export function canExecuteSession(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['enfermeira', 'tecnica_enfermagem']);
-}
-
-export function canFinalizeSession(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['enfermeira']);
-}
-
-export function canViewPendingAttendances(role: UserRole | null | undefined): boolean {
-  return hasRole(role, PENDING_ATTENDANCE_ROLES);
-}
-
-export function canManageBookings(role: UserRole | null | undefined): boolean {
-  return hasRole(role, BOOKING_ROLES);
-}
-
-export function canEditVitals(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['enfermeira']);
-}
-
-export function canViewVitalsChart(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['medico', 'enfermeira']);
-}
-
-export function canPrintExternalPrescription(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['medico']);
-}
-
-export function canManageUsers(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['administrador']);
-}
-
-export function canViewAudit(role: UserRole | null | undefined): boolean {
-  return hasRole(role, ['administrador']);
-}
-
-export function isReadOnlyCadastro(role: UserRole | null | undefined): boolean {
-  return role === 'consulta';
-}
-
-export function roleLabel(role: UserRole | null | undefined): string {
-  switch (role) {
-    case 'administrador':
-      return 'Administrador';
-    case 'estoque':
-      return 'Estoque';
-    case 'operacional':
-      return 'Operacional';
-    case 'consulta':
-      return 'Consulta';
-    case 'medico':
-      return 'Médico';
-    case 'enfermeira':
-      return 'Enfermagem';
-    case 'tecnica_enfermagem':
-      return 'Técnica de enfermagem';
-    case 'vendedor':
-      return 'Vendedor';
-    default:
-      return '';
-  }
+export function roleLabel(profile: UserProfile | null | undefined): string {
+  return profile?.name ?? '';
 }

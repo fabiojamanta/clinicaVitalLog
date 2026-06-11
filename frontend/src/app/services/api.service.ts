@@ -13,14 +13,23 @@ export class ApiService{
     }
     return Object.keys(out).length ? out : undefined;
   }
+  private creds = { withCredentials: true as const };
+
   get<T>(path: string, params?: Record<string, string | number | null | undefined>) {
-    return this.http.get<T>(`${this.base}${path}`, { params: this.queryParams(params) });
+    return this.http.get<T>(`${this.base}${path}`, { ...this.creds, params: this.queryParams(params) });
   }
-  post<T>(path:string,body:any){return this.http.post<T>(`${this.base}${path}`,body)}
-  put<T>(path:string,body:any){return this.http.put<T>(`${this.base}${path}`,body)}
+  post<T>(path: string, body: any) {
+    return this.http.post<T>(`${this.base}${path}`, body, this.creds);
+  }
+  put<T>(path: string, body: any) {
+    return this.http.put<T>(`${this.base}${path}`, body, this.creds);
+  }
+  delete<T>(path: string) {
+    return this.http.delete<T>(`${this.base}${path}`, this.creds);
+  }
   openPdf(path: string, params?: Record<string, string | number | null | undefined>) {
     this.http
-      .get(`${this.base}${path}`, { responseType: 'blob', params: this.queryParams(params), observe: 'response' })
+      .get(`${this.base}${path}`, { ...this.creds, responseType: 'blob', params: this.queryParams(params), observe: 'response' })
       .subscribe({
         next: (res) => {
           const blob = res.body;

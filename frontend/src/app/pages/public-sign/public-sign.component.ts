@@ -1,9 +1,18 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { SignaturePadComponent } from '../../shared/signature-pad.component';
+
+type PublicSignPreview = {
+  clinic_name: string;
+  session_number: number;
+  total_sessions: number;
+  session_date?: string;
+  ready_to_sign: boolean;
+};
 
 type PublicSignInfo = {
   patient_name: string;
@@ -18,7 +27,7 @@ type PublicSignInfo = {
 @Component({
   selector: 'app-public-sign',
   standalone: true,
-  imports: [CommonModule, DateBrPipe, SignaturePadComponent],
+  imports: [CommonModule, FormsModule, DateBrPipe, SignaturePadComponent],
   template: `
 <div class="public-sign-page">
   @if(loading){
@@ -31,28 +40,36 @@ type PublicSignInfo = {
   }@else if(done){
     <div class="card">
       <h2>Assinatura registrada</h2>
-      <p>Obrigado, {{info?.patient_name}}! Sua confirmação da sessão {{info?.session_number}} de {{info?.total_sessions}} foi registrada com sucesso.</p>
+      <p>Obrigado! Sua confirmação da sessão {{preview?.session_number}} de {{preview?.total_sessions}} foi registrada com sucesso.</p>
       <p class="hint">Você já pode fechar esta página.</p>
     </div>
-  }@else if(info){
+  }@else if(preview){
     <div class="card">
       <h2>Confirmação de sessão</h2>
-      <p><strong>Paciente:</strong> {{info.patient_name}}</p>
-      <p><strong>Sessão:</strong> {{info.session_number}} de {{info.total_sessions}}</p>
-      @if(info.session_date){<p><strong>Data:</strong> {{info.session_date | dateBr}}</p>}
-      <p><strong>Tratamento prescrito:</strong></p>
-      <p class="pre-wrap">{{info.medications}}</p>
-      @if(info.exits.length){
-        <p><strong>Medicamentos aplicados:</strong></p>
-        <ul>
-          @for(e of info.exits;track $index){
-            <li>{{e.product_name}} — {{e.quantity}} {{e.unit || 'un'}}</li>
-          }
-        </ul>
-      }
-      @if(info.comments){
-        <p><strong>Observações da equipe:</strong></p>
-        <p class="pre-wrap">{{info.comments}}</p>
+      <p><strong>{{preview.clinic_name}}</strong></p>
+      <p><strong>Sessão:</strong> {{preview.session_number}} de {{preview.total_sessions}}</p>
+      @if(preview.session_date){<p><strong>Data:</strong> {{preview.session_date | dateBr}}</p>}
+      @if(!details){
+        <p class="hint">Toque em "Ver detalhes" para conferir o que está sendo confirmado.</p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="loadDetails()">Ver detalhes da sessão</button>
+        </div>
+      }@else {
+        <p><strong>Paciente:</strong> {{details.patient_name}}</p>
+        <p><strong>Tratamento prescrito:</strong></p>
+        <p class="pre-wrap">{{details.medications}}</p>
+        @if(details.exits.length){
+          <p><strong>Medicamentos aplicados:</strong></p>
+          <ul>
+            @for(e of details.exits;track $index){
+              <li>{{e.product_name}} — {{e.quantity}} {{e.unit || 'un'}}</li>
+            }
+          </ul>
+        }
+        @if(details.comments){
+          <p><strong>Observações da equipe:</strong></p>
+          <p class="pre-wrap">{{details.comments}}</p>
+        }
       }
     </div>
     <div class="card">
@@ -87,7 +104,8 @@ type PublicSignInfo = {
   `],
 })
 export class PublicSignComponent implements OnInit {
-  info: PublicSignInfo | null = null;
+  preview: PublicSignPreview | null = null;
+  details: PublicSignInfo | null = null;
   loading = true;
   fatalError = '';
   error = '';
@@ -108,22 +126,29 @@ export class PublicSignComponent implements OnInit {
         this.loading = false;
         return;
       }
-      this.loadInfo();
+      this.loadPreview();
     });
   }
 
-  private loadInfo() {
+  private loadPreview() {
     this.loading = true;
     this.fatalError = '';
-    this.api.get<PublicSignInfo>(`/public/sign/${this.token}`).subscribe({
+    this.api.get<PublicSignPreview>(`/public/sign/${this.token}`).subscribe({
       next: (r) => {
-        this.info = r;
+        this.preview = r;
         this.loading = false;
       },
       error: (e) => {
         this.fatalError = e.error?.detail || 'Link inválido, expirado ou já utilizado.';
         this.loading = false;
       },
+    });
+  }
+
+  loadDetails() {
+    this.api.get<PublicSignInfo>(`/public/sign/${this.token}/details`).subscribe({
+      next: (r) => { this.details = r; },
+      error: (e) => { this.error = e.error?.detail || 'Não foi possível carregar os detalhes.'; },
     });
   }
 

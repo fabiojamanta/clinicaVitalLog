@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..datetime_utils import now_br, today_br
-from ..deps import get_current_user, log_action, require_roles
+from ..deps import get_current_user, log_action
 from ..models import (
     Attendance,
     BookingStatus,
@@ -17,14 +17,12 @@ from ..models import (
     Payment,
     PaymentType,
     User,
-    UserRole,
+    AccessLevel,
 )
+from ..permissions import require_menu_access
 from ..schemas import BookingCheckIn, BookingCreate, BookingRead, PaymentRead
 
 router = APIRouter(tags=["reservas"])
-
-BOOKING_ROLES = (UserRole.vendedor, UserRole.operacional, UserRole.administrador)
-
 
 def _money(value: float | Decimal) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -86,7 +84,7 @@ def list_bookings(
     status: Optional[BookingStatus] = Query(None),
     scheduled_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("reservas", AccessLevel.read)),
 ):
     q = db.query(ConsultationBooking).filter(ConsultationBooking.clinic_id == user.clinic_id)
     if patient_id:
@@ -106,7 +104,7 @@ def list_bookings(
 def get_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("reservas", AccessLevel.read)),
 ):
     return _booking_to_read(_get_booking(db, user, booking_id))
 
@@ -116,7 +114,7 @@ def create_booking(
     payload: BookingCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*BOOKING_ROLES)),
+    user: User = Depends(require_menu_access("reservas", AccessLevel.write)),
 ):
     patient = (
         db.query(Client)
@@ -180,7 +178,7 @@ def check_in_booking(
     payload: BookingCheckIn,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*BOOKING_ROLES)),
+    user: User = Depends(require_menu_access("reservas", AccessLevel.write)),
 ):
     booking = _get_booking(db, user, booking_id)
     if booking.status == BookingStatus.cancelado:
@@ -247,7 +245,7 @@ def cancel_booking(
     booking_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*BOOKING_ROLES)),
+    user: User = Depends(require_menu_access("reservas", AccessLevel.write)),
 ):
     booking = _get_booking(db, user, booking_id)
     if booking.status == BookingStatus.presente:

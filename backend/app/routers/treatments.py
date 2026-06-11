@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..attendance_workflow import session_status
 from ..database import get_db
 from ..datetime_utils import now_br, today_br
-from ..deps import get_current_user, log_action, require_roles
+from ..deps import get_current_user, log_action
 from ..models import (
     Attendance,
     Clinic,
@@ -18,15 +18,20 @@ from ..models import (
     Treatment,
     TreatmentSession,
     User,
-    UserRole,
+    AccessLevel,
 )
+from ..permissions import require_menu_access, user_is_admin, user_clinical_slug
 from ..receipt_pdf import build_session_receipt_pdf
+from ..config import settings
+from ..rate_limit import limiter
+from ..signature_validation import validate_signature_data_url
 from ..schemas import (
     AttendanceDispenseCreate,
     ExitRead,
     PublicSignCreate,
     PublicSignExitItem,
     PublicSignInfo,
+    PublicSignPreview,
     SessionSignatureCreate,
     SignatureLinkRead,
     TreatmentCreate,
@@ -40,7 +45,6 @@ from .stock import _exit_to_read, perform_stock_exit
 router = APIRouter(tags=["tratamentos"])
 public_router = APIRouter(prefix="/public", tags=["assinatura-publica"])
 
-SESSION_ROLES = (UserRole.enfermeira, UserRole.tecnica_enfermagem)
 SIGNATURE_TOKEN_TTL = timedelta(hours=1)
 MAX_SESSIONS = 100
 
@@ -124,8 +128,10 @@ def create_treatment(
     payload: TreatmentCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.medico)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    if not user_is_admin(user) and user_clinical_slug(user) != "medico":
+        raise HTTPException(403, "Apenas médico pode criar tratamento")
     att = db.query(Attendance).filter_by(id=attendance_id, clinic_id=user.clinic_id).first()
     if not att:
         raise HTTPException(404, "Atendimento não encontrado")
@@ -170,7 +176,7 @@ def list_treatments(
     patient_id: Optional[int] = Query(None),
     attendance_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
     q = db.query(Treatment).filter(
         Treatment.clinic_id == user.clinic_id,
@@ -188,7 +194,7 @@ def list_treatments(
 def get_session(
     session_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
     return _session_to_read(_get_session(db, user, session_id))
 
@@ -199,8 +205,10 @@ def update_session_tech(
     payload: TreatmentSessionSectionUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.tecnica_enfermagem)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    if not user_is_admin(user) and user_clinical_slug(user) not in ("tecnica_enfermagem",):
+        raise HTTPException(403, "Apenas técnica pode aplicar sessão")
     s = _get_session(db, user, session_id)
     if session_status(s) == "concluido":
         raise HTTPException(400, "Sessão já concluída")
@@ -228,8 +236,10 @@ def update_session_nursing(
     payload: TreatmentSessionSectionUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.enfermeira)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    if not user_is_admin(user) and user_clinical_slug(user) != "enfermeira":
+        raise HTTPException(403, "Apenas enfermagem pode finalizar sessão")
     s = _get_session(db, user, session_id)
     if session_status(s) == "concluido":
         raise HTTPException(400, "Sessão já concluída")
@@ -260,8 +270,11 @@ def dispense_session_medication(
     payload: AttendanceDispenseCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*SESSION_ROLES)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    cs = user_clinical_slug(user)
+    if not user_is_admin(user) and cs not in ("enfermeira", "tecnica_enfermagem"):
+        raise HTTPException(403, "Acesso negado")
     s = _get_session(db, user, session_id)
     if session_status(s) == "concluido":
         raise HTTPException(400, "Sessão já concluída")
@@ -289,14 +302,15 @@ def sign_session(
     payload: SessionSignatureCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*SESSION_ROLES)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    cs = user_clinical_slug(user)
+    if not user_is_admin(user) and cs not in ("enfermeira", "tecnica_enfermagem"):
+        raise HTTPException(403, "Acesso negado")
     s = _get_session(db, user, session_id)
     if session_status(s) == "concluido":
         raise HTTPException(400, "Sessão já concluída")
-    signature = (payload.signature or "").strip()
-    if not signature.startswith("data:image/"):
-        raise HTTPException(400, "Assinatura inválida")
+    signature = validate_signature_data_url((payload.signature or "").strip())
     s.patient_signature = signature
     s.signed_at = now_br()
     s.signature_token = None
@@ -316,8 +330,11 @@ def create_signature_link(
     session_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*SESSION_ROLES)),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    cs = user_clinical_slug(user)
+    if not user_is_admin(user) and cs not in ("enfermeira", "tecnica_enfermagem"):
+        raise HTTPException(403, "Acesso negado")
     s = _get_session(db, user, session_id)
     if session_status(s) == "concluido":
         raise HTTPException(400, "Sessão já concluída")
@@ -339,7 +356,7 @@ def create_signature_link(
 def session_receipt_pdf(
     session_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
     s = _get_session(db, user, session_id)
     clinic = db.query(Clinic).filter(Clinic.id == user.clinic_id).first()
@@ -370,6 +387,23 @@ def _session_comments(s: TreatmentSession) -> Optional[str]:
     return "\n".join(parts) or None
 
 
+def _clinic_name(db: Session, s: TreatmentSession) -> str:
+    clinic_id = s.treatment.clinic_id if s.treatment else 1
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    return clinic.name if clinic else "Clínica"
+
+
+def _public_preview(db: Session, s: TreatmentSession) -> PublicSignPreview:
+    t = s.treatment
+    return PublicSignPreview(
+        clinic_name=_clinic_name(db, s),
+        session_number=s.session_number,
+        total_sessions=t.total_sessions,
+        session_date=s.session_date,
+        ready_to_sign=True,
+    )
+
+
 def _public_info(s: TreatmentSession) -> PublicSignInfo:
     t = s.treatment
     return PublicSignInfo(
@@ -391,25 +425,40 @@ def _public_info(s: TreatmentSession) -> PublicSignInfo:
     )
 
 
-@public_router.get("/sign/{token}", response_model=PublicSignInfo)
-def public_sign_info(token: str, db: Session = Depends(get_db)):
+@public_router.get("/sign/{token}", response_model=PublicSignPreview)
+@limiter.limit("60/minute")
+def public_sign_info(token: str, request: Request, db: Session = Depends(get_db)):
+    return _public_preview(db, _get_session_by_token(db, token))
+
+
+@public_router.get("/sign/{token}/details", response_model=PublicSignInfo)
+@limiter.limit("60/minute")
+def public_sign_details(token: str, request: Request, db: Session = Depends(get_db)):
     return _public_info(_get_session_by_token(db, token))
 
 
 @public_router.post("/sign/{token}", response_model=PublicSignInfo)
-def public_sign_submit(token: str, payload: PublicSignCreate, request: Request, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def public_sign_submit(
+    token: str,
+    payload: PublicSignCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     s = _get_session_by_token(db, token)
-    signature = (payload.signature or "").strip()
-    if not signature.startswith("data:image/"):
-        raise HTTPException(400, "Assinatura inválida")
+    if settings.PUBLIC_SIGN_PIN and (payload.pin or "").strip() != settings.PUBLIC_SIGN_PIN:
+        raise HTTPException(403, "PIN inválido")
+    signature = validate_signature_data_url((payload.signature or "").strip())
     s.patient_signature = signature
     s.signed_at = now_br()
     s.signature_token = None
     s.signature_token_expires_at = None
+    clinic_id = s.treatment.clinic_id if s.treatment else 1
     log_action(
         db, None, "patient_signature", "treatment_sessions", s.id,
         after={"signed_at": s.signed_at.isoformat(), "method": "remoto"},
         request=request,
+        clinic_id=clinic_id,
     )
     db.commit()
     db.refresh(s)

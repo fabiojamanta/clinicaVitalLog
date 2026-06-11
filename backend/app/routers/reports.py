@@ -11,6 +11,8 @@ from reportlab.pdfgen import canvas
 from ..database import get_db
 from ..models import User
 from ..deps import get_current_user
+from ..models import AccessLevel
+from ..permissions import require_menu_access
 from ..report_service import (
     report_estoque_atual,
     report_vencimentos,
@@ -186,7 +188,7 @@ def _fetch_rows(
 @router.get("/estoque-atual")
 def report_estoque_atual_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     product_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
     stock_status: Optional[str] = Query(None),
@@ -199,7 +201,7 @@ def report_estoque_atual_json(
 @router.get("/vencimentos")
 def report_vencimentos_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     product_id: Optional[int] = Query(None),
     situation: Optional[str] = Query(None),
     expiration_from: Optional[str] = Query(None),
@@ -219,7 +221,7 @@ def report_vencimentos_json(
 @router.get("/saidas")
 def report_saidas_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     product_id: Optional[int] = Query(None),
     client_id: Optional[int] = Query(None),
     date_from: Optional[str] = Query(None),
@@ -243,7 +245,7 @@ def report_saidas_json(
 @router.get("/fornecedores")
 def report_fornecedores_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     supplier_id: Optional[int] = Query(None),
     active: Optional[str] = Query(None),
 ):
@@ -253,7 +255,7 @@ def report_fornecedores_json(
 @router.get("/clientes")
 def report_clientes_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     client_id: Optional[int] = Query(None),
     client_type: Optional[str] = Query(None),
     active: Optional[str] = Query(None),
@@ -264,7 +266,7 @@ def report_clientes_json(
 @router.get("/produtos")
 def report_produtos_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     product_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
     supplier_id: Optional[int] = Query(None),
@@ -287,7 +289,7 @@ def report_produtos_json(
 def report_pdf(
     kind: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     product_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
     stock_status: Optional[str] = Query(None),
@@ -379,7 +381,7 @@ def report_pdf(
 def report_json(
     kind: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_menu_access("relatorios", AccessLevel.read)),
     product_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
     stock_status: Optional[str] = Query(None),

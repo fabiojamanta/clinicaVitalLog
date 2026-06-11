@@ -5,14 +5,16 @@ import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
+import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 
 @Component({
   selector: 'app-entries',
   standalone: true,
-  imports: [CommonModule, FormsModule, DateBrPipe],
+  imports: [CommonModule, FormsModule, DateBrPipe, ReadonlyBannerComponent],
   template: `
 <div class="top"><div class="page-title"><h1>Entradas de estoque</h1><p>Registre entrada de produto informando lote e validade.</p></div></div>
 @if(error){<div class="error">{{error}}</div>}
+<app-readonly-banner [show]="auth.isReadOnlyMenu('entradas')"></app-readonly-banner>
 @if(success){<div class="success-box">
   {{success}}
   @if(lastEntryId){<div class="form-actions" style="margin-top:10px"><button type="button" class="btn btn-secondary" (click)="printLabel(lastEntryId)">Imprimir etiqueta</button></div>}
