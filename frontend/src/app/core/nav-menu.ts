@@ -65,7 +65,6 @@ export const NAV_MENU: NavMenuEntry[] = buildNavMenu();
 export function filterNavMenu(
   menu: NavMenuEntry[],
   canShow: (item: MenuItem) => boolean,
-  canManagePermissions?: () => boolean,
 ): NavMenuEntry[] {
   const result: NavMenuEntry[] = [];
   for (const entry of menu) {
@@ -73,13 +72,7 @@ export function filterNavMenu(
       if (canShow(entry.menuItem)) result.push(entry);
       continue;
     }
-    let children = entry.children.filter((child) => canShow(child.menuItem));
-    if (entry.id === 'configuracoes' && canManagePermissions?.()) {
-      children = [
-        ...children,
-        { label: 'Permissões', route: '/permissoes', menuItem: 'usuarios' as MenuItem },
-      ];
-    }
+    const children = entry.children.filter((child) => canShow(child.menuItem));
     if (children.length) result.push({ ...entry, children });
   }
   return result;

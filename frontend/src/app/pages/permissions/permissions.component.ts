@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 
 type Profile = {
   id: number;
@@ -11,7 +12,6 @@ type Profile = {
   is_admin: boolean;
   clinical_slug?: string;
   active: boolean;
-  user_count?: number;
 };
 
 type MenuRow = { menu_key: string; label: string; access_level: string };
@@ -21,7 +21,12 @@ type MenuRow = { menu_key: string; label: string; access_level: string };
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-<div class="top"><div class="page-title"><h1>Permissões</h1><p>Perfis de acesso e permissões por menu do sistema.</p></div></div>
+<div class="top">
+  <div class="page-title">
+    <h1>Permissões</h1>
+    <p>Configure o acesso por menu para cada perfil.</p>
+  </div>
+</div>
 @if(error){<div class="error">{{error}}</div>}
 
 <div class="card grid grid-3">
@@ -30,9 +35,6 @@ type MenuRow = { menu_key: string; label: string; access_level: string };
     <select [(ngModel)]="selectedProfileId" (ngModelChange)="loadPermissions()">
       @for(p of profiles; track p.id){<option [ngValue]="p.id">{{p.name}}</option>}
     </select>
-  </div>
-  <div class="form-actions">
-    <button type="button" class="btn btn-secondary" (click)="openNewProfile()">Novo perfil</button>
   </div>
 </div>
 
@@ -48,7 +50,7 @@ type MenuRow = { menu_key: string; label: string; access_level: string };
       <tr>
         <td>{{r.label}}</td>
         <td>
-          <select [(ngModel)]="r.access_level">
+          <select [(ngModel)]="r.access_level" [disabled]="!auth.canManagePermissions()">
             <option value="hidden">Oculto</option>
             <option value="read">Somente consulta</option>
             <option value="write">Acesso total</option>
@@ -57,68 +59,22 @@ type MenuRow = { menu_key: string; label: string; access_level: string };
       </tr>
     }
   </table>
-  <div class="form-actions"><button type="button" class="btn" (click)="savePermissions()">Salvar permissões</button></div>
-</div>
-}
-
-<div class="card table-wrap">
-  <h3>Perfis cadastrados</h3>
-  <table>
-    <tr><th>Nome</th><th>Slug</th><th>Clínico</th><th>Usuários</th><th>Sistema</th><th>Ações</th></tr>
-    @for(p of profiles; track p.id){
-      <tr>
-        <td>{{p.name}}</td>
-        <td>{{p.slug}}</td>
-        <td>{{p.clinical_slug || '—'}}</td>
-        <td>{{p.user_count ?? 0}}</td>
-        <td>{{p.is_system ? 'Sim' : 'Não'}}</td>
-        <td>
-          @if(!p.is_admin && !p.is_system){
-            <button type="button" class="btn btn-danger btn-sm" (click)="deleteProfile(p)">Excluir</button>
-          }
-        </td>
-      </tr>
-    }
-  </table>
-</div>
-
-@if(profileModal){
-<div class="modal-backdrop" (click)="profileModal=false"></div>
-<div class="modal card">
-  <h3>Novo perfil</h3>
-  <div class="grid grid-2">
-    <div><label>Nome</label><input [(ngModel)]="newProfile.name"></div>
-    <div><label>Slug</label><input [(ngModel)]="newProfile.slug" placeholder="recepcao_vip"></div>
-    <div>
-      <label>Perfil clínico (opcional)</label>
-      <select [(ngModel)]="newProfile.clinical_slug">
-        <option [ngValue]="null">Nenhum</option>
-        <option value="medico">Médico</option>
-        <option value="enfermeira">Enfermagem</option>
-        <option value="tecnica_enfermagem">Técnica</option>
-      </select>
-    </div>
-  </div>
-  <div class="form-actions">
-    <button type="button" class="btn" (click)="createProfile()">Criar</button>
-    <button type="button" class="btn btn-secondary" (click)="profileModal=false">Cancelar</button>
-  </div>
+  @if(auth.canManagePermissions()){
+    <div class="form-actions"><button type="button" class="btn" (click)="savePermissions()">Salvar permissões</button></div>
+  }
 </div>
 }`,
-  styles: [`
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; }
-    .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 101; min-width: 320px; }
-  `],
 })
 export class PermissionsComponent implements OnInit {
   profiles: Profile[] = [];
   selectedProfileId = 0;
   permissionRows: MenuRow[] = [];
   error = '';
-  profileModal = false;
-  newProfile = { name: '', slug: '', clinical_slug: null as string | null };
 
-  constructor(private api: ApiService) {}
+  constructor(
+    private api: ApiService,
+    public auth: AuthService,
+  ) {}
 
   get selectedProfile() {
     return this.profiles.find((p) => p.id === this.selectedProfileId);
@@ -131,9 +87,9 @@ export class PermissionsComponent implements OnInit {
   loadProfiles() {
     this.api.get<Profile[]>('/profiles').subscribe({
       next: (r) => {
-        this.profiles = r;
-        if (!this.selectedProfileId && r.length) {
-          this.selectedProfileId = r[0].id;
+        this.profiles = r.filter((p) => p.active);
+        if (!this.selectedProfileId && this.profiles.length) {
+          this.selectedProfileId = this.profiles[0].id;
           this.loadPermissions();
         }
       },
@@ -150,6 +106,7 @@ export class PermissionsComponent implements OnInit {
   }
 
   savePermissions() {
+    if (!this.auth.canManagePermissions()) return;
     this.error = '';
     this.api.put(`/profiles/${this.selectedProfileId}/permissions`, {
       permissions: this.permissionRows.map((r) => ({
@@ -159,34 +116,6 @@ export class PermissionsComponent implements OnInit {
     }).subscribe({
       next: () => this.loadPermissions(),
       error: (e) => (this.error = e.error?.detail || 'Erro ao salvar'),
-    });
-  }
-
-  openNewProfile() {
-    this.newProfile = { name: '', slug: '', clinical_slug: null };
-    this.profileModal = true;
-  }
-
-  createProfile() {
-    this.api.post<Profile>('/profiles', this.newProfile).subscribe({
-      next: (p) => {
-        this.profileModal = false;
-        this.loadProfiles();
-        this.selectedProfileId = p.id;
-        this.loadPermissions();
-      },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao criar perfil'),
-    });
-  }
-
-  deleteProfile(p: Profile) {
-    if (!confirm(`Excluir perfil ${p.name}?`)) return;
-    this.api.delete(`/profiles/${p.id}`).subscribe({
-      next: () => {
-        this.selectedProfileId = 0;
-        this.loadProfiles();
-      },
-      error: (e) => (this.error = e.error?.detail || 'Erro ao excluir'),
     });
   }
 }

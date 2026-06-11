@@ -27,6 +27,8 @@ export const PROTECTED_ROUTES: AppRouteEntry[] = [
   { menuKey: 'relatorios', label: 'Relatórios', path: '/relatorios' },
   { menuKey: 'relatorios', label: 'Relatório', path: '/relatorios/:kind' },
   { menuKey: 'usuarios', label: 'Usuários', path: '/usuarios', navGroup: 'configuracoes' },
+  { menuKey: 'perfis', label: 'Perfis', path: '/perfis', navGroup: 'configuracoes' },
+  { menuKey: 'permissoes', label: 'Permissões', path: '/permissoes', navGroup: 'configuracoes' },
   { menuKey: 'auditoria', label: 'Auditoria', path: '/auditoria', navGroup: 'configuracoes' },
 ];
 

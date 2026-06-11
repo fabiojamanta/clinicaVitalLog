@@ -209,7 +209,6 @@ export class AppComponent implements OnDestroy {
     this.navEntries = filterNavMenu(
       NAV_MENU,
       (item) => this.auth.canShowMenuItem(item),
-      () => this.auth.canManagePermissions(),
     );
   }
 

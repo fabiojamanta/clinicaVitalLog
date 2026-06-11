@@ -49,7 +49,9 @@ function sortOrderFor(key, fallback) {
     atendimentos_pendentes: 32,
     relatorios: 40,
     usuarios: 50,
-    auditoria: 51,
+    perfis: 51,
+    permissoes: 52,
+    auditoria: 53,
   };
   return order[key] ?? fallback;
 }

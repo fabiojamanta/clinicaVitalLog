@@ -13,7 +13,9 @@ MENU_CATALOG: list[dict] = [
     {"menu_key": "atendimentos_pendentes", "label": "Pendências", "route_paths": ["/atendimentos-pendentes"], "nav_group": "atendimentos", "sort_order": 32},
     {"menu_key": "relatorios", "label": "Relatórios", "route_paths": ["/relatorios","/relatorios/:kind"], "nav_group": None, "sort_order": 40},
     {"menu_key": "usuarios", "label": "Usuários", "route_paths": ["/usuarios"], "nav_group": "configuracoes", "sort_order": 50},
-    {"menu_key": "auditoria", "label": "Auditoria", "route_paths": ["/auditoria"], "nav_group": "configuracoes", "sort_order": 51},
+    {"menu_key": "perfis", "label": "Perfis", "route_paths": ["/perfis"], "nav_group": "configuracoes", "sort_order": 51},
+    {"menu_key": "permissoes", "label": "Permissões", "route_paths": ["/permissoes"], "nav_group": "configuracoes", "sort_order": 52},
+    {"menu_key": "auditoria", "label": "Auditoria", "route_paths": ["/auditoria"], "nav_group": "configuracoes", "sort_order": 53},
 ]
 
 

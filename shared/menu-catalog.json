@@ -101,12 +101,30 @@
     "sort_order": 50
   },
   {
+    "menu_key": "perfis",
+    "label": "Perfis",
+    "route_paths": [
+      "/perfis"
+    ],
+    "nav_group": "configuracoes",
+    "sort_order": 51
+  },
+  {
+    "menu_key": "permissoes",
+    "label": "Permissões",
+    "route_paths": [
+      "/permissoes"
+    ],
+    "nav_group": "configuracoes",
+    "sort_order": 52
+  },
+  {
     "menu_key": "auditoria",
     "label": "Auditoria",
     "route_paths": [
       "/auditoria"
     ],
     "nav_group": "configuracoes",
-    "sort_order": 51
+    "sort_order": 53
   }
 ]

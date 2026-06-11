@@ -22,6 +22,8 @@ export type MenuItem =
   | 'atendimentos_pendentes'
   | 'relatorios'
   | 'usuarios'
+  | 'perfis'
+  | 'permissoes'
   | 'auditoria';
 
 export type PermissionMap = Partial<Record<MenuItem, AccessLevel>>;
@@ -75,7 +77,7 @@ export function canAccessRoute(
   path: string,
 ): boolean {
   const p = path.split('?')[0];
-  if (p === '/permissoes') return isAdmin(profile);
+  if (p === '/perfis' || p === '/permissoes') return isAdmin(profile);
   const mk = menuKeyForPath(p);
   if (!mk) return true;
   return canShowMenuItem(profile, perms, mk as MenuItem);

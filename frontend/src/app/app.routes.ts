@@ -17,6 +17,7 @@ import { ReportViewComponent } from './pages/reports/report-view.component';
 import { UsersComponent } from './pages/users/users.component';
 import { AuditComponent } from './pages/audit/audit.component';
 import { PermissionsComponent } from './pages/permissions/permissions.component';
+import { ProfilesComponent } from './pages/profiles/profiles.component';
 
 const protectedRoute = [authGuard, roleGuard];
 
@@ -36,6 +37,7 @@ export const routes: Routes = [
   { path: 'relatorios', component: ReportsComponent, canActivate: protectedRoute },
   { path: 'relatorios/:kind', component: ReportViewComponent, canActivate: protectedRoute },
   { path: 'usuarios', component: UsersComponent, canActivate: protectedRoute },
+  { path: 'perfis', component: ProfilesComponent, canActivate: protectedRoute },
   { path: 'permissoes', component: PermissionsComponent, canActivate: protectedRoute },
   { path: 'auditoria', component: AuditComponent, canActivate: protectedRoute },
   { path: '**', redirectTo: '' },
