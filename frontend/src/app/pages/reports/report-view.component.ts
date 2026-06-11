@@ -9,6 +9,7 @@ import { CpfCnpjBrPipe } from '../../core/cpf-cnpj.pipe';
 import { PhoneBrPipe } from '../../core/phone-br.pipe';
 import { PageHeaderComponent } from '../../shared/page-header.component';
 import { SearchSelectComponent } from '../../shared/search-select.component';
+import { clientOptionLabel } from '../../core/search-select.util';
 import { PAGE_LOGOS } from '../../shared/page-logos';
 import { SkeletonTableComponent } from '../../shared/skeleton-table.component';
 
@@ -219,8 +220,9 @@ const REPORTS: Record<string, ReportConfig> = {
           <app-search-select
             fieldLabel="Produto"
             searchPath="/products"
-            placeholder="Digite para filtrar ou deixe vazio para todos"
+            placeholder="Digite 3 letras, selecione na lista"
             [(ngModel)]="filters.product_id"
+            [filterMode]="true"
           ></app-search-select>
         </div>
       }
@@ -267,8 +269,10 @@ const REPORTS: Record<string, ReportConfig> = {
           <app-search-select
             fieldLabel="Cliente"
             searchPath="/clients"
-            placeholder="Digite para filtrar ou deixe vazio para todos"
+            placeholder="Digite 3 letras, selecione na lista"
             [(ngModel)]="filters.client_id"
+            [filterMode]="true"
+            [labelFn]="clientOptionLabel"
           ></app-search-select>
         </div>
         <div>
@@ -301,8 +305,9 @@ const REPORTS: Record<string, ReportConfig> = {
           <app-search-select
             fieldLabel="Fornecedor"
             searchPath="/suppliers"
-            placeholder="Digite para filtrar ou deixe vazio para todos"
+            placeholder="Digite 3 letras, selecione na lista"
             [(ngModel)]="filters.supplier_id"
+            [filterMode]="true"
           ></app-search-select>
         </div>
         <div>
@@ -319,8 +324,10 @@ const REPORTS: Record<string, ReportConfig> = {
           <app-search-select
             fieldLabel="Cliente"
             searchPath="/clients"
-            placeholder="Digite para filtrar ou deixe vazio para todos"
+            placeholder="Digite 3 letras, selecione na lista"
             [(ngModel)]="filters.client_id"
+            [filterMode]="true"
+            [labelFn]="clientOptionLabel"
           ></app-search-select>
         </div>
         <div>
@@ -346,8 +353,9 @@ const REPORTS: Record<string, ReportConfig> = {
           <app-search-select
             fieldLabel="Produto"
             searchPath="/products"
-            placeholder="Digite para filtrar ou deixe vazio para todos"
+            placeholder="Digite 3 letras, selecione na lista"
             [(ngModel)]="filters.product_id"
+            [filterMode]="true"
           ></app-search-select>
         </div>
         <div>
@@ -363,8 +371,9 @@ const REPORTS: Record<string, ReportConfig> = {
           <app-search-select
             fieldLabel="Fornecedor"
             searchPath="/suppliers"
-            placeholder="Digite para filtrar ou deixe vazio para todos"
+            placeholder="Digite 3 letras, selecione na lista"
             [(ngModel)]="filters.supplier_id"
+            [filterMode]="true"
           ></app-search-select>
         </div>
         <div>
@@ -434,6 +443,7 @@ const REPORTS: Record<string, ReportConfig> = {
 `,
 })
 export class ReportViewComponent implements OnInit {
+  readonly clientOptionLabel = clientOptionLabel;
   config: ReportConfig | null = null;
   rows: Record<string, unknown>[] = [];
   productTypes = PRODUCT_TYPES;

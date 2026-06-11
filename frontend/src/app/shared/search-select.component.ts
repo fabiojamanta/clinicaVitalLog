@@ -143,6 +143,8 @@ export class SearchSelectComponent implements ControlValueAccessor {
   @Input() minChars = 3;
   @Input() allowClear = true;
   @Input() disabled = false;
+  /** Em filtros: só confirma valor ao selecionar na lista ou limpar (×). */
+  @Input() filterMode = false;
   @Input() labelFn?: (item: Record<string, unknown>) => string;
   @Input() resultFilter?: (item: Record<string, unknown>) => boolean;
 
@@ -234,6 +236,18 @@ export class SearchSelectComponent implements ControlValueAccessor {
   }
 
   onQueryChange() {
+    if (this.filterMode) {
+      this.open = true;
+      const q = this.query.trim();
+      if (q.length < this.minChars) {
+        this.results = [];
+        this.loading = false;
+        return;
+      }
+      this.scheduleSearch(q);
+      return;
+    }
+
     if (this.hasValue && this.query !== this.selectedLabel) {
       this.value = null;
       this.selectedLabel = '';

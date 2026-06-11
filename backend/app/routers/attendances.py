@@ -266,6 +266,8 @@ def list_pending_attendances(
                     total_sessions=t.total_sessions,
                 )
             )
+    if patient_id:
+        result = [item for item in result if item.patient_id == patient_id]
     return result
 
 

@@ -6,7 +6,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { SearchSelectComponent } from '../../shared/search-select.component';
-import { patientSearchParams } from '../../core/search-select.util';
+import { patientFilterParams } from '../../core/search-select.util';
 
 type PendingItem = {
   id: number;
@@ -39,9 +39,10 @@ type PendingItem = {
     <app-search-select
       fieldLabel="Filtrar por paciente"
       searchPath="/clients"
-      [queryParams]="patientSearchParams"
-      placeholder="Digite para filtrar ou deixe vazio para todos"
+      [queryParams]="patientFilterParams"
+      placeholder="Digite 3 letras, selecione na lista"
       [(ngModel)]="patientId"
+      [filterMode]="true"
       (ngModelChange)="load()"
     ></app-search-select>
   </div>
@@ -77,7 +78,7 @@ type PendingItem = {
 </div>`,
 })
 export class AttendancePendingComponent implements OnInit {
-  readonly patientSearchParams = patientSearchParams;
+  readonly patientFilterParams = patientFilterParams;
   rows: PendingItem[] = [];
   patientId = 0;
   error = '';
@@ -93,8 +94,12 @@ export class AttendancePendingComponent implements OnInit {
 
   load() {
     this.error = '';
+    const params: Record<string, number | null> = {};
+    if (this.patientId > 0) {
+      params['patient_id'] = this.patientId;
+    }
     this.api
-      .get<PendingItem[]>('/attendances/pending', { patient_id: this.patientId || null })
+      .get<PendingItem[]>('/attendances/pending', params)
       .subscribe({
         next: (r) => (this.rows = r),
         error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro ao carregar pendências')),

@@ -65,7 +65,7 @@ type EntryLookup = {
     <app-search-select
       fieldLabel="Cliente"
       searchPath="/clients"
-      placeholder="Digite o nome do cliente"
+      placeholder="Digite 3 letras e selecione na lista"
       [(ngModel)]="form.client_id"
       [initialLabel]="clientInitialLabel"
       [labelFn]="clientOptionLabel"

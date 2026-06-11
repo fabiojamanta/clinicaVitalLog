@@ -9,7 +9,7 @@ import { todayIsoBr } from '../../core/date-br.util';
 import { AuthService } from '../../services/auth.service';
 import { ReadonlyBannerComponent } from '../../shared/readonly-banner.component';
 import { SearchSelectComponent } from '../../shared/search-select.component';
-import { patientSearchParams } from '../../core/search-select.util';
+import { patientSearchParams, patientFilterParams } from '../../core/search-select.util';
 
 type Payment = {
   id: number;
@@ -50,7 +50,7 @@ type Booking = {
       fieldLabel="Paciente"
       searchPath="/clients"
       [queryParams]="patientSearchParams"
-      placeholder="Digite o nome do paciente"
+      placeholder="Digite 3 letras e selecione na lista"
       [(ngModel)]="form.patient_id"
     ></app-search-select>
   </div>
@@ -107,9 +107,10 @@ type Booking = {
     <app-search-select
       fieldLabel="Paciente"
       searchPath="/clients"
-      [queryParams]="patientSearchParams"
-      placeholder="Digite para filtrar ou deixe vazio para todos"
+      [queryParams]="patientFilterParams"
+      placeholder="Digite 3 letras, selecione na lista"
       [(ngModel)]="filterPatientId"
+      [filterMode]="true"
       (ngModelChange)="load()"
     ></app-search-select>
   </div>
@@ -179,6 +180,7 @@ type Booking = {
 })
 export class BookingsComponent implements OnInit {
   readonly patientSearchParams = patientSearchParams;
+  readonly patientFilterParams = patientFilterParams;
   rows: Booking[] = [];
   error = '';
 
