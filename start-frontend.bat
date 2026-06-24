@@ -10,7 +10,7 @@ if not exist "node_modules\" (
 )
 
 echo.
-echo VitalLog - Frontend
+echo Sanelis Medical EcoSystem - Frontend
 echo API local:   http://localhost:8000  (rode start-backend.bat antes)
 echo Aplicacao:   http://localhost:4200
 echo.

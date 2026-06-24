@@ -163,7 +163,7 @@ _docs_kwargs = (
     if settings.is_production
     else {}
 )
-app = FastAPI(title="VitalLog", version="1.0.0", **_docs_kwargs)
+app = FastAPI(title=settings.APP_NAME, version="1.0.0", **_docs_kwargs)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -188,4 +188,4 @@ app.include_router(bookings.router)
 
 @app.get("/")
 def health():
-    return {"status": "online", "app": "VitalLog"}
+    return {"status": "online", "app": settings.APP_NAME}

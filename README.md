@@ -1,4 +1,4 @@
-# VitalLog
+# Sanelis Medical EcoSystem
 
 Sistema web para controle de estoque de clínica médica — controle para sua clínica, segurança para o paciente. Front-end Angular, API FastAPI e banco relacional.
 

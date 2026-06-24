@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     CORS_ORIGINS: str = "http://localhost:4200,http://127.0.0.1:4200"
-    APP_NAME: str = "VitalLog"
+    APP_NAME: str = "Sanelis Medical EcoSystem"
     TIMEZONE: str = "America/Sao_Paulo"
     WRITE_OFF_CLIENT_NAME: str = "Baixa de estoque / Descarte"
     ADMIN_EMAIL: str = ""

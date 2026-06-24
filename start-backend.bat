@@ -56,7 +56,7 @@ goto run
 
 :run
 echo.
-echo VitalLog - Backend
+echo Sanelis Medical EcoSystem - Backend
 echo API:          http://localhost:8000
 echo Documentacao: http://localhost:8000/docs
 echo.
