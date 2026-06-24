@@ -208,6 +208,10 @@ a {
   display: block;
 }
 
+.nav-brand-name {
+  display: none;
+}
+
 .nav-panel {
   display: flex;
   flex: 1;
@@ -2025,6 +2029,25 @@ tr.selected {
   .nav-brand-logo {
     height: 36px;
     max-width: 96px;
+  }
+
+  .logo-link {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .nav-brand-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    min-width: 0;
+    font-size: clamp(0.68rem, 2.8vw, 0.88rem);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    color: var(--text);
   }
 
   /* Drawer lateral */

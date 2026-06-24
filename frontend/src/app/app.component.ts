@@ -28,6 +28,7 @@ const HOVER_CLOSE_DELAY_MS = 250;
     <div class="app-header-bar">
       <a routerLink="/" class="logo-link" (click)="closeMenu()">
         <img class="nav-brand-logo" [src]="brandLogo" [alt]="brandName" />
+        <span class="nav-brand-name">{{ brandName }}</span>
       </a>
       <button
         type="button"
