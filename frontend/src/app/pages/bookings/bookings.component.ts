@@ -290,7 +290,7 @@ export class BookingsComponent implements OnInit {
         this.closeCheckIn();
         this.load();
         if (b.attendance_id) {
-          this.router.navigate(['/atendimentos'], { queryParams: { attendanceId: b.attendance_id } });
+          this.router.navigate(['/atendimentos', b.attendance_id, 'medico']);
         }
       },
       error: (e) => (this.error = formatApiError(e.error?.detail, 'Erro no check-in')),
@@ -307,7 +307,7 @@ export class BookingsComponent implements OnInit {
 
   openAttendance(b: Booking) {
     if (b.attendance_id) {
-      this.router.navigate(['/atendimentos'], { queryParams: { attendanceId: b.attendance_id } });
+      this.router.navigate(['/atendimentos', b.attendance_id, 'medico']);
     }
   }
 

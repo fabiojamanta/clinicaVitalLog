@@ -7,6 +7,7 @@ import { ApiService } from '../../services/api.service';
 import { DateBrPipe } from '../../core/date-br.pipe';
 import { SearchSelectComponent } from '../../shared/search-select.component';
 import { patientFilterParams } from '../../core/search-select.util';
+import { pendingSectionForAction, sessionSectionForAction } from '../attendance/attendance-labels';
 
 type PendingItem = {
   id: number;
@@ -172,9 +173,11 @@ export class AttendancePendingComponent implements OnInit {
 
   open(i: PendingItem) {
     if (i.item_type === 'sessao' && i.session_id) {
-      this.router.navigate(['/sessoes', i.session_id]);
+      const section = sessionSectionForAction(i.pending_action);
+      this.router.navigate(['/sessoes', i.session_id, ...(section === 'resumo' ? [] : [section])]);
     } else {
-      this.router.navigate(['/atendimentos'], { queryParams: { attendanceId: i.id } });
+      const section = pendingSectionForAction(i.pending_action);
+      this.router.navigate(['/atendimentos', i.id, section]);
     }
   }
 }

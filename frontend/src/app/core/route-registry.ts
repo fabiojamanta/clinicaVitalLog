@@ -22,8 +22,18 @@ export const PROTECTED_ROUTES: AppRouteEntry[] = [
   { menuKey: 'saidas', label: 'Saída', path: '/saidas', navGroup: 'movimentacao' },
   { menuKey: 'reservas', label: 'Reservas', path: '/reservas', navGroup: 'atendimentos' },
   { menuKey: 'atendimentos', label: 'Consulta', path: '/atendimentos', navGroup: 'atendimentos' },
+  { menuKey: 'atendimentos', label: 'Histórico', path: '/atendimentos/historico' },
+  { menuKey: 'atendimentos', label: 'Sinais vitais', path: '/atendimentos/:id/sinais-vitais' },
+  { menuKey: 'atendimentos', label: 'Médico', path: '/atendimentos/:id/medico' },
+  { menuKey: 'atendimentos', label: 'Técnica', path: '/atendimentos/:id/tecnica' },
+  { menuKey: 'atendimentos', label: 'Dispensar', path: '/atendimentos/:id/dispensar' },
+  { menuKey: 'atendimentos', label: 'Finalizar', path: '/atendimentos/:id/finalizar' },
   { menuKey: 'atendimentos_pendentes', label: 'Pendências', path: '/atendimentos-pendentes', navGroup: 'atendimentos' },
   { menuKey: 'atendimentos', label: 'Sessão', path: '/sessoes/:id' },
+  { menuKey: 'atendimentos', label: 'Sessão medicamentos', path: '/sessoes/:id/medicamentos' },
+  { menuKey: 'atendimentos', label: 'Sessão aplicação', path: '/sessoes/:id/aplicacao' },
+  { menuKey: 'atendimentos', label: 'Sessão assinatura', path: '/sessoes/:id/assinatura' },
+  { menuKey: 'atendimentos', label: 'Sessão enfermagem', path: '/sessoes/:id/enfermagem' },
   { menuKey: 'relatorios', label: 'Relatórios', path: '/relatorios' },
   { menuKey: 'relatorios', label: 'Relatório', path: '/relatorios/:kind' },
   { menuKey: 'usuarios', label: 'Usuários', path: '/usuarios', navGroup: 'configuracoes' },
@@ -35,6 +45,8 @@ export const PROTECTED_ROUTES: AppRouteEntry[] = [
 export function menuKeyForPath(urlPath: string): string | null {
   const p = urlPath.split('?')[0];
   if (p.startsWith('/sessoes/')) return 'atendimentos';
+  if (p.startsWith('/atendimentos/') && p !== '/atendimentos/historico') return 'atendimentos';
+  if (p === '/atendimentos/historico') return 'atendimentos';
   if (p.startsWith('/relatorios/')) return 'relatorios';
   const exact = PROTECTED_ROUTES.find((r) => r.exact && (p === r.path || (r.path === '/' && p === '')));
   if (exact) return exact.menuKey;
