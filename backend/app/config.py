@@ -1,9 +1,11 @@
 import os
+import re
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 INSECURE_SECRET_PLACEHOLDER = "troque-esta-chave-em-producao"
+_PASSWORD_RE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$")
 
 
 class Settings(BaseSettings):
@@ -41,8 +43,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self):
-        if self.is_production and self.SECRET_KEY == INSECURE_SECRET_PLACEHOLDER:
-            raise ValueError("SECRET_KEY deve ser definida em produção (ENV=production)")
+        if self.is_production:
+            if self.SECRET_KEY == INSECURE_SECRET_PLACEHOLDER:
+                raise ValueError("SECRET_KEY deve ser definida em produção (ENV=production)")
+            if "*" in self.cors_origins_list():
+                raise ValueError("CORS_ORIGINS não pode ser * em produção")
+            if self.ADMIN_PASSWORD and not _PASSWORD_RE.match(self.ADMIN_PASSWORD):
+                raise ValueError("ADMIN_PASSWORD deve ter letras e números (mín. 8 caracteres) em produção")
         return self
 
     class Config:

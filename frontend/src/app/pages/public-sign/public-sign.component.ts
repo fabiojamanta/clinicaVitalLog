@@ -147,7 +147,7 @@ export class PublicSignComponent implements OnInit {
   }
 
   loadDetails() {
-    this.api.get<PublicSignInfo>(`/public/sign/${this.token}/details`).subscribe({
+    this.api.post<PublicSignInfo>(`/public/sign/${this.token}/prepare`, {}).subscribe({
       next: (r) => { this.details = r; },
       error: (e) => { this.error = formatApiError(e.error?.detail, 'Não foi possível carregar os detalhes.'); },
     });

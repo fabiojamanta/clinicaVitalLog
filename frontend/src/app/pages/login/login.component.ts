@@ -17,10 +17,9 @@ import { BRAND_NAME, LOGIN_BACKGROUND } from '../../shared/page-logos';
   <div class="login-panel">
     <div class="login-card">
       @if(error){<div class="error">{{error}}</div>}
-      <label>Email</label><input [(ngModel)]="email" placeholder="admin@clinica.com" autocomplete="username">
-      <label>Senha</label><input [(ngModel)]="password" type="password" placeholder="admin123" autocomplete="current-password">
+      <label>Email</label><input [(ngModel)]="email" placeholder="seu@email.com" autocomplete="username">
+      <label>Senha</label><input [(ngModel)]="password" type="password" placeholder="••••••••" autocomplete="current-password">
       <button type="button" class="btn btn-block" (click)="login()">Entrar</button>
-      <p class="empty">Usuário inicial: admin&#64;clinica.com / admin123</p>
     </div>
   </div>
 </div>`,
@@ -28,8 +27,8 @@ import { BRAND_NAME, LOGIN_BACKGROUND } from '../../shared/page-logos';
 export class LoginComponent {
   readonly brandName = BRAND_NAME;
   readonly loginBackground = LOGIN_BACKGROUND;
-  email = 'admin@clinica.com';
-  password = 'admin123';
+  email = '';
+  password = '';
   error = '';
   constructor(private auth: AuthService, private router: Router) {}
   login() {

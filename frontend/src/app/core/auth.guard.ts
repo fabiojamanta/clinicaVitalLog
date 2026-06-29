@@ -17,6 +17,7 @@ export const authGuard: CanActivateFn = () => {
   return http.get<any>(`${environment.apiUrl}/auth/me`, { withCredentials: true }).pipe(
     map((u) => {
       auth.hydrateFromUser(u);
+      auth.markSessionVerified();
       return true;
     }),
     catchError(() => of(router.createUrlTree(['/login']))),

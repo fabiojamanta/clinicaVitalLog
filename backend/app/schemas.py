@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_serializer, field_validator
 import re
 from datetime import date, datetime
 from typing import Optional, Any
@@ -14,14 +14,12 @@ from .models import (
 )
 from .datetime_utils import format_datetime_br_iso
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthResponse(BaseModel):
     user: dict
 
 class Login(BaseModel):
-    email: str = Field(min_length=3, max_length=160)
-    password: str = Field(min_length=1, max_length=128)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
 
 class ProfileCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
@@ -246,9 +244,9 @@ class AttendanceCreate(BaseModel):
     payment_notes: Optional[str] = None
 
 class AttendanceSectionUpdate(BaseModel):
-    notes: Optional[str] = None
-    prescription: Optional[str] = None
-    external_prescription: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=10000)
+    prescription: Optional[str] = Field(default=None, max_length=10000)
+    external_prescription: Optional[str] = Field(default=None, max_length=10000)
 
 class PaymentRead(BaseModel):
     id: int
@@ -290,13 +288,13 @@ class BookingCreate(BaseModel):
     total_amount: float
     payment_method: PaymentMethod
     paid_at: Optional[datetime] = None
-    notes: Optional[str] = None
-    payment_notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=10000)
+    payment_notes: Optional[str] = Field(default=None, max_length=10000)
 
 class BookingCheckIn(BaseModel):
     payment_method: PaymentMethod
     paid_at: Optional[datetime] = None
-    payment_notes: Optional[str] = None
+    payment_notes: Optional[str] = Field(default=None, max_length=10000)
 
 class VitalSignUpdate(BaseModel):
     systolic_bp: Optional[int] = None
@@ -307,7 +305,7 @@ class VitalSignUpdate(BaseModel):
     height: Optional[float] = None
     spo2: Optional[int] = None
     glycemia: Optional[int] = None
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=10000)
 
 class VitalSignRead(BaseModel):
     id: int
@@ -412,9 +410,9 @@ class AttendancePendingItem(BaseModel):
         return format_datetime_br_iso(value)
 
 class TreatmentCreate(BaseModel):
-    medications: str
+    medications: str = Field(max_length=10000)
     total_sessions: int
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=10000)
 
 class TreatmentSessionListItem(BaseModel):
     id: int
@@ -473,7 +471,7 @@ class TreatmentSessionRead(BaseModel):
 
 class TreatmentSessionSectionUpdate(BaseModel):
     session_date: Optional[date] = None
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=10000)
 
 class SessionSignatureCreate(BaseModel):
     signature: str

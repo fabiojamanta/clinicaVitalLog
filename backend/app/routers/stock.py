@@ -11,7 +11,7 @@ from reportlab.pdfgen import canvas
 from ..database import get_db
 from ..models import Product, Lot, StockEntry, StockExit, MovementStatus, ExitType, User, AuditLog, Client, AccessLevel
 from ..schemas import EntryCreate, EntryRead, EntryLookupRead, ExitCreate, ExitRead, CancelExit, CancelEntry, AuditRead
-from ..deps import get_current_user, log_action
+from ..deps import get_current_user, log_action, mask_audit_json
 from ..permissions import require_menu_access, user_is_admin, get_user_permissions, has_menu_access
 from ..tenant import assert_attendance_in_clinic, assert_client_in_clinic
 from ..entry_code import generate_entry_code, normalize_entry_code
@@ -459,8 +459,8 @@ def list_audit(
             action=r.action,
             entity=r.entity,
             entity_id=r.entity_id,
-            before_data=r.before_data,
-            after_data=r.after_data,
+            before_data=mask_audit_json(r.before_data),
+            after_data=mask_audit_json(r.after_data),
             created_at=r.created_at,
         )
         for r in rows

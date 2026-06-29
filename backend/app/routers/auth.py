@@ -4,14 +4,14 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth_cookies import clear_auth_cookies, set_auth_cookies
 from ..database import get_db
 from ..deps import get_current_user, log_action, log_failed_login
+from ..login_lockout import clear_failures, is_locked, record_failure
 from ..models import User
 from ..permissions import get_user_permissions, profile_to_dict
 from ..rate_limit import limiter
-from ..schemas import Login, Token
+from ..schemas import AuthResponse, Login
 from ..security import (
     create_access_token,
     generate_refresh_token_plain,
-    get_password_hash,
     revoke_all_user_refresh_tokens,
     store_refresh_token,
     validate_refresh_token,
@@ -32,9 +32,11 @@ def _user_payload(user: User, db: Session) -> dict:
     }
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=AuthResponse)
 @limiter.limit("30/minute")
 def login(payload: Login, request: Request, response: Response, db: Session = Depends(get_db)):
+    if is_locked(payload.email):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Tente novamente em alguns minutos.")
     user = (
         db.query(User)
         .options(joinedload(User.profile))
@@ -42,9 +44,11 @@ def login(payload: Login, request: Request, response: Response, db: Session = De
         .first()
     )
     if not user or not verify_password(payload.password, user.password_hash):
+        record_failure(payload.email)
         log_failed_login(db, payload.email, request=request)
         db.commit()
         raise HTTPException(status_code=401, detail="Email ou senha inválidos")
+    clear_failures(payload.email)
     access = create_access_token({"sub": str(user.id), "profile_id": str(user.profile_id)})
     refresh_plain = generate_refresh_token_plain()
     revoke_all_user_refresh_tokens(db, user.id)
@@ -52,14 +56,10 @@ def login(payload: Login, request: Request, response: Response, db: Session = De
     set_auth_cookies(response, access, refresh_plain)
     log_action(db, user, "login", "users", user.id, request=request)
     db.commit()
-    return {
-        "access_token": access,
-        "token_type": "bearer",
-        "user": _user_payload(user, db),
-    }
+    return {"user": _user_payload(user, db)}
 
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=AuthResponse)
 @limiter.limit("60/minute")
 def refresh_session(request: Request, response: Response, db: Session = Depends(get_db)):
     refresh_plain = request.cookies.get("refresh_token")
@@ -81,7 +81,7 @@ def refresh_session(request: Request, response: Response, db: Session = Depends(
     store_refresh_token(db, user.id, new_refresh)
     set_auth_cookies(response, access, new_refresh)
     db.commit()
-    return {"ok": True, "access_token": access, "user": _user_payload(user, db)}
+    return {"user": _user_payload(user, db)}
 
 
 @router.post("/logout")

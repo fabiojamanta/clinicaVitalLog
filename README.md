@@ -4,8 +4,8 @@ Sistema web para controle de estoque de clínica médica — controle para sua c
 
 ## Funcionalidades incluídas
 
-- Login com JWT
-- Usuário inicial administrador
+- Login com sessão segura (cookies HttpOnly + refresh rotacionado)
+- Usuário administrador inicial (senha gerada no primeiro boot em dev)
 - Cadastro de usuários e perfis
 - Cadastro de fornecedores
 - Cadastro de clientes com tipo: paciente, médico, setor interno, funcionário ou outro
@@ -109,12 +109,19 @@ http://localhost:8000/docs
 
 ## Usuário inicial
 
-```text
-Email: admin_clinica.com
-Senha: admin123
-```
+Em desenvolvimento, se `ADMIN_EMAIL` e `ADMIN_PASSWORD` estiverem vazios no `.env`, o backend cria `admin@localhost` com senha aleatória exibida **uma vez** no console ao iniciar.
 
-Troque essa senha antes de usar em produção.
+Em produção, defina `ADMIN_EMAIL` e `ADMIN_PASSWORD` (mín. 8 caracteres, letras e números) nas variáveis de ambiente.
+
+## Segurança
+
+O sistema implementa proteções OWASP: autenticação cookie-only, CSRF, rate limiting, headers de segurança (CSP, HSTS), mascaramento de dados sensíveis em auditoria e fluxo de assinatura remota em duas etapas.
+
+Auditoria de dependências:
+
+```bash
+scripts\security-audit.bat
+```
 
 ## Como rodar o front-end
 

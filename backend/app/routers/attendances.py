@@ -559,6 +559,9 @@ def dispense_medication(
     db: Session = Depends(get_db),
     user: User = Depends(require_menu_access("atendimentos", AccessLevel.write)),
 ):
+    cs = user_clinical_slug(user)
+    if not user_is_admin(user) and cs not in ("enfermeira", "tecnica_enfermagem"):
+        raise HTTPException(403, "Acesso negado")
     att = _get_attendance(db, user, attendance_id)
     obj = perform_stock_exit(
         db,

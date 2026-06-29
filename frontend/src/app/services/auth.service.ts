@@ -46,6 +46,7 @@ export class AuthService {
   private permissions: PermissionMap = {};
   private profile: UserProfile | null = null;
   private sessionActive = false;
+  private sessionVerified = false;
 
   constructor(
     private http: HttpClient,
@@ -68,23 +69,20 @@ export class AuthService {
   }
 
   isAuthenticated() {
-    return this.sessionActive;
-  }
-
-  /** @deprecated tokens are HttpOnly cookies */
-  getToken() {
-    return null;
+    return this.sessionActive && this.sessionVerified;
   }
 
   login(email: string, password: string) {
     return this.http
-      .post<any>(`${this.api.base}/auth/login`, { email, password }, { withCredentials: true })
+      .post<{ user: { id?: number; profile?: UserProfile; permissions?: PermissionMap } }>(
+        `${this.api.base}/auth/login`,
+        { email, password },
+        { withCredentials: true },
+      )
       .pipe(
         tap((r) => {
-          if (r.access_token) {
-            sessionStorage.setItem('access_token', r.access_token);
-          }
           this.hydrateFromUser(r.user);
+          this.sessionVerified = true;
         }),
       );
   }
@@ -97,6 +95,7 @@ export class AuthService {
         this.profile = u.profile ?? null;
         this.permissions = u.permissions ?? {};
         this.sessionActive = true;
+        this.sessionVerified = true;
       }),
     );
   }
@@ -110,8 +109,15 @@ export class AuthService {
 
   tryRestoreSession() {
     return this.http.get<any>(`${this.api.base}/auth/me`, { withCredentials: true }).pipe(
-      tap((u) => this.hydrateFromUser(u)),
+      tap((u) => {
+        this.hydrateFromUser(u);
+        this.markSessionVerified();
+      }),
     );
+  }
+
+  markSessionVerified() {
+    this.sessionVerified = true;
   }
 
   logout() {
@@ -122,10 +128,10 @@ export class AuthService {
 
   clearLocalSession() {
     sessionStorage.removeItem('user');
-    sessionStorage.removeItem('access_token');
     this.profile = null;
     this.permissions = {};
     this.sessionActive = false;
+    this.sessionVerified = false;
   }
 
   user(): { id?: number; name?: string; email?: string; profile?: UserProfile; permissions?: PermissionMap } {

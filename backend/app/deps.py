@@ -1,5 +1,4 @@
-from fastapi import Depends, HTTPException, status, Request, Cookie
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session, joinedload
 from .database import get_db
 from .security import decode_token
@@ -7,11 +6,10 @@ from .models import User, AuditLog
 from .datetime_utils import now_br
 import json
 
-_bearer = HTTPBearer(auto_error=False)
-
 _SENSITIVE_KEYS = frozenset({
     "password", "password_hash", "signature", "patient_signature",
     "prescription", "external_prescription", "notes",
+    "email", "phone", "cpf", "cnpj", "document",
 })
 
 
@@ -33,23 +31,21 @@ def _mask_data(data):
     return data
 
 
-def _extract_token(
-    credentials: HTTPAuthorizationCredentials | None,
-    access_token: str | None,
-) -> str | None:
-    if credentials and credentials.credentials:
-        return credentials.credentials
-    if access_token:
-        return access_token
-    return None
+def mask_audit_json(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return raw
+    return json.dumps(_mask_data(data), default=str, ensure_ascii=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    access_token: str | None = Cookie(None, alias="access_token"),
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    token = _extract_token(credentials, access_token)
+    token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
     payload = decode_token(token)
@@ -99,8 +95,10 @@ def log_action(
 def log_failed_login(db: Session, email: str, request: Request | None = None):
     ip = request.client.host if request and request.client else None
     masked = email[:2] + "***" if email else "?"
+    user = db.query(User).filter(User.email == email).first() if email else None
+    clinic_id = user.clinic_id if user else 1
     log = AuditLog(
-        clinic_id=1,
+        clinic_id=clinic_id,
         user_id=None,
         action="login_failed",
         entity="users",

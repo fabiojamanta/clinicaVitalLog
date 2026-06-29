@@ -1,7 +1,10 @@
+import secrets
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from .database import Base, engine, SessionLocal
 from .models import Clinic, User, Client, ClientType, StockEntry, Profile
 from .entry_code import generate_entry_code
@@ -12,6 +15,7 @@ from .routers import auth, crud, stock, reports, attendances, treatments, bookin
 from .profile_seed import seed_profiles, sync_menu_catalog
 from .user_migration import migrate_users_table
 from .middleware import SecurityHeadersMiddleware
+from .csrf import CsrfMiddleware
 from .rate_limit import limiter
 
 Base.metadata.create_all(bind=engine)
@@ -115,12 +119,14 @@ def seed():
         by_slug = seed_profiles(db)
         admin_profile = by_slug["administrador"]
 
-        admin_email = settings.ADMIN_EMAIL.strip() or (
-            "admin@clinica.com" if not settings.is_production else ""
-        )
-        admin_password = settings.ADMIN_PASSWORD or (
-            "admin123" if not settings.is_production else ""
-        )
+        admin_email = settings.ADMIN_EMAIL.strip()
+        admin_password = settings.ADMIN_PASSWORD
+        if not settings.is_production:
+            if not admin_email:
+                admin_email = "admin@localhost"
+            if not admin_password:
+                admin_password = secrets.token_urlsafe(10) + "1a"
+                print(f"[DEV] Admin inicial: {admin_email} / {admin_password}")
         if admin_email and admin_password:
             if settings.is_production:
                 validate_password_strength(admin_password)
@@ -166,6 +172,8 @@ _docs_kwargs = (
 app = FastAPI(title=settings.APP_NAME, version="1.0.0", **_docs_kwargs)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(CsrfMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 _origins = settings.cors_origins_list()
 app.add_middleware(

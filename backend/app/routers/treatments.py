@@ -45,7 +45,7 @@ from .stock import _exit_to_read, perform_stock_exit
 router = APIRouter(tags=["tratamentos"])
 public_router = APIRouter(prefix="/public", tags=["assinatura-publica"])
 
-SIGNATURE_TOKEN_TTL = timedelta(hours=1)
+SIGNATURE_TOKEN_TTL = timedelta(minutes=30)
 MAX_SESSIONS = 100
 
 
@@ -77,7 +77,7 @@ def _treatment_to_read(t: Treatment) -> TreatmentRead:
     )
 
 
-def _session_to_read(s: TreatmentSession) -> TreatmentSessionRead:
+def _session_to_read(s: TreatmentSession, *, include_signature: bool = False) -> TreatmentSessionRead:
     t = s.treatment
     return TreatmentSessionRead(
         id=s.id,
@@ -99,7 +99,7 @@ def _session_to_read(s: TreatmentSession) -> TreatmentSessionRead:
         nursing_user_id=s.nursing_user_id,
         nursing_user_name=s.nursing_user.name if s.nursing_user else None,
         nursing_updated_at=s.nursing_updated_at,
-        patient_signature=s.patient_signature,
+        patient_signature=s.patient_signature if include_signature else None,
         signed_at=s.signed_at,
         status=session_status(s),
         exits=[
@@ -196,7 +196,7 @@ def get_session(
     db: Session = Depends(get_db),
     user: User = Depends(require_menu_access("atendimentos", AccessLevel.read)),
 ):
-    return _session_to_read(_get_session(db, user, session_id))
+    return _session_to_read(_get_session(db, user, session_id), include_signature=True)
 
 
 @router.put("/treatment-sessions/{session_id}/tech", response_model=TreatmentSessionRead)
@@ -322,7 +322,7 @@ def sign_session(
     )
     db.commit()
     db.refresh(s)
-    return _session_to_read(s)
+    return _session_to_read(s, include_signature=True)
 
 
 @router.post("/treatment-sessions/{session_id}/signature-link", response_model=SignatureLinkRead)
@@ -426,19 +426,19 @@ def _public_info(s: TreatmentSession) -> PublicSignInfo:
 
 
 @public_router.get("/sign/{token}", response_model=PublicSignPreview)
-@limiter.limit("60/minute")
+@limiter.limit("20/minute")
 def public_sign_info(token: str, request: Request, db: Session = Depends(get_db)):
     return _public_preview(db, _get_session_by_token(db, token))
 
 
-@public_router.get("/sign/{token}/details", response_model=PublicSignInfo)
-@limiter.limit("60/minute")
-def public_sign_details(token: str, request: Request, db: Session = Depends(get_db)):
+@public_router.post("/sign/{token}/prepare", response_model=PublicSignInfo)
+@limiter.limit("20/minute")
+def public_sign_prepare(token: str, request: Request, db: Session = Depends(get_db)):
     return _public_info(_get_session_by_token(db, token))
 
 
 @public_router.post("/sign/{token}", response_model=PublicSignInfo)
-@limiter.limit("30/minute")
+@limiter.limit("10/minute")
 def public_sign_submit(
     token: str,
     payload: PublicSignCreate,

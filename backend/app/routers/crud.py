@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Supplier, Client, Product, Lot, User, Profile, AccessLevel
+from ..models import Supplier, Client, ClientType, Product, Lot, User, Profile, AccessLevel
 from ..schemas import SupplierCreate, SupplierRead, ClientCreate, ClientRead, ProductCreate, ProductRead, LotRead, UserCreate, UserUpdate, UserRead
 from ..deps import get_current_user, log_action
 from ..permissions import require_menu_access, require_admin, assert_menu_access, assert_any_menu_access
@@ -202,7 +202,11 @@ def list_clients(
         assert_menu_access(db, user, "clientes", AccessLevel.read)
     query = db.query(Client).filter(Client.clinic_id == user.clinic_id)
     if client_type:
-        query = query.filter(Client.client_type == client_type)
+        try:
+            ct = ClientType(client_type)
+        except ValueError:
+            raise HTTPException(400, "Tipo de cliente inválido")
+        query = query.filter(Client.client_type == ct)
     if active_only:
         query = query.filter(Client.active == True)
     if q and len(q.strip()) >= 3:

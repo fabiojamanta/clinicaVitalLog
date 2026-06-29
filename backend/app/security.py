@@ -3,26 +3,31 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
+import jwt
 from fastapi import HTTPException
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .datetime_utils import now_br
 from .models import RefreshToken, User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
 _PASSWORD_RE = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def validate_password_strength(password: str) -> None:
@@ -45,7 +50,7 @@ def decode_token(token: str):
         if payload.get("type") not in (None, "access"):
             return None
         return payload
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 
