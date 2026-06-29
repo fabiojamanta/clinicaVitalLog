@@ -93,3 +93,20 @@ export function sessionSectionForAction(action: string): SessionSection {
       return 'resumo';
   }
 }
+
+export function sectionForWorkflowStatus(status: string): AttendanceSection {
+  switch (status) {
+    case 'aguardando_sinais_vitais':
+      return 'sinais-vitais';
+    case 'aguardando_medico':
+      return 'medico';
+    case 'aguardando_tecnica':
+      return 'tecnica';
+    case 'aguardando_enfermagem':
+      return 'finalizar';
+    case 'concluido':
+      return 'finalizar';
+    default:
+      return 'sinais-vitais';
+  }
+}

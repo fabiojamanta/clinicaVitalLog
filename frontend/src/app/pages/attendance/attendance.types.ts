@@ -25,6 +25,9 @@ export type AttendanceListItem = {
   patient_name: string;
   attendance_date: string;
   created_at?: string;
+  workflow_status: string;
+  phase_label: string;
+  current_section: AttendanceSection;
 };
 
 export type AttendanceExit = {

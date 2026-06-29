@@ -48,22 +48,50 @@ import { TreatmentSessionSubnavComponent } from './treatment-session-subnav.comp
   <div class="card">
     <h3>Etapas da sessão</h3>
     <div class="hub-actions">
-      <a class="hub-card" [routerLink]="['/sessoes', s.id, 'medicamentos']">
-        <strong>Medicamentos</strong>
-        <span>Saída de estoque e itens aplicados</span>
-      </a>
-      <a class="hub-card" [routerLink]="['/sessoes', s.id, 'aplicacao']">
-        <strong>Aplicação</strong>
-        <span>Registro da técnica de enfermagem</span>
-      </a>
-      <a class="hub-card" [routerLink]="['/sessoes', s.id, 'assinatura']">
-        <strong>Assinatura</strong>
-        <span>Confirmação do paciente</span>
-      </a>
-      <a class="hub-card" [routerLink]="['/sessoes', s.id, 'enfermagem']">
-        <strong>Enfermagem</strong>
-        <span>Revisão e finalização</span>
-      </a>
+      @if(auth.canAccessSessionSection('medicamentos')){
+        <a class="hub-card" [routerLink]="['/sessoes', s.id, 'medicamentos']">
+          <strong>Medicamentos</strong>
+          <span>Saída de estoque e itens aplicados</span>
+        </a>
+      }@else{
+        <div class="hub-card is-disabled" aria-disabled="true">
+          <strong>Medicamentos</strong>
+          <span>Saída de estoque e itens aplicados</span>
+        </div>
+      }
+      @if(auth.canAccessSessionSection('aplicacao')){
+        <a class="hub-card" [routerLink]="['/sessoes', s.id, 'aplicacao']">
+          <strong>Aplicação</strong>
+          <span>Registro da técnica de enfermagem</span>
+        </a>
+      }@else{
+        <div class="hub-card is-disabled" aria-disabled="true">
+          <strong>Aplicação</strong>
+          <span>Registro da técnica de enfermagem</span>
+        </div>
+      }
+      @if(auth.canAccessSessionSection('assinatura')){
+        <a class="hub-card" [routerLink]="['/sessoes', s.id, 'assinatura']">
+          <strong>Assinatura</strong>
+          <span>Confirmação do paciente</span>
+        </a>
+      }@else{
+        <div class="hub-card is-disabled" aria-disabled="true">
+          <strong>Assinatura</strong>
+          <span>Confirmação do paciente</span>
+        </div>
+      }
+      @if(auth.canAccessSessionSection('enfermagem')){
+        <a class="hub-card" [routerLink]="['/sessoes', s.id, 'enfermagem']">
+          <strong>Enfermagem</strong>
+          <span>Revisão e finalização</span>
+        </a>
+      }@else{
+        <div class="hub-card is-disabled" aria-disabled="true">
+          <strong>Enfermagem</strong>
+          <span>Revisão e finalização</span>
+        </div>
+      }
     </div>
   </div>
 }`,
@@ -74,6 +102,11 @@ import { TreatmentSessionSubnavComponent } from './treatment-session-subnav.comp
       text-decoration: none; color: inherit; background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.15);
     }
     .hub-card:hover { background: rgba(15, 118, 110, 0.12); }
+    .hub-card.is-disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
     .hub-card strong { font-size: 1rem; }
     .hub-card span { font-size: 0.85rem; color: #64748b; }
   `],

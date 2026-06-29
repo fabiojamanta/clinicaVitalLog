@@ -352,6 +352,9 @@ class AttendanceListItem(BaseModel):
     patient_name: Optional[str] = None
     attendance_date: date
     created_at: Optional[datetime] = None
+    workflow_status: str
+    phase_label: str
+    current_section: str
 
     @field_serializer('created_at')
     def serialize_created_at(self, value: datetime | None) -> str | None:

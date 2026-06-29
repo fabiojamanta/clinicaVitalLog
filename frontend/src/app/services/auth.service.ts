@@ -39,6 +39,10 @@ import {
   canWriteMenu,
   canReadMenu,
   roleLabel,
+  canAccessAttendanceSection,
+  canAccessSessionSection,
+  AttendanceNavSection,
+  SessionNavSection,
 } from '../core/role-permissions';
 
 @Injectable({ providedIn: 'root' })
@@ -211,6 +215,14 @@ export class AuthService {
   canViewVitalsChart() { return canViewVitalsChart(this.profile, this.permissions); }
   canPrintExternalPrescription() { return canPrintExternalPrescription(this.profile, this.permissions); }
   canManagePermissions() { return canManagePermissions(this.profile); }
+
+  canAccessAttendanceSection(section: AttendanceNavSection) {
+    return canAccessAttendanceSection(this.profile, this.permissions, section);
+  }
+
+  canAccessSessionSection(section: SessionNavSection) {
+    return canAccessSessionSection(this.profile, this.permissions, section);
+  }
 
   isReadOnlyCadastro(menu: MenuItem = 'fornecedores') {
     return isReadOnlyMenu(this.profile, this.permissions, menu);

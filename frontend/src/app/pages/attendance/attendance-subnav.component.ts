@@ -1,6 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { DateBrPipe } from '../../core/date-br.pipe';
+import { AttendanceNavSection } from '../../core/role-permissions';
+import { AuthService } from '../../services/auth.service';
 import { AttendanceSection } from './attendance.types';
 import { workflowLabel } from './attendance-labels';
 
@@ -19,18 +21,42 @@ import { workflowLabel } from './attendance-labels';
       <a routerLink="/atendimentos" class="btn btn-secondary btn-sm">Trocar paciente</a>
     </div>
     <nav class="attendance-tabs" aria-label="Seções do atendimento">
-      <a
-        [routerLink]="['/atendimentos/historico']"
-        [queryParams]="{ patientId }"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{ exact: false }"
-        [class.active]="active === 'historico'"
-      >Histórico</a>
-      <a [routerLink]="['/atendimentos', attendanceId, 'sinais-vitais']" routerLinkActive="active" [class.active]="active === 'sinais-vitais'">Sinais vitais</a>
-      <a [routerLink]="['/atendimentos', attendanceId, 'medico']" routerLinkActive="active" [class.active]="active === 'medico'">Médico</a>
-      <a [routerLink]="['/atendimentos', attendanceId, 'tecnica']" routerLinkActive="active" [class.active]="active === 'tecnica'">Técnica</a>
-      <a [routerLink]="['/atendimentos', attendanceId, 'dispensar']" routerLinkActive="active" [class.active]="active === 'dispensar'">Dispensar</a>
-      <a [routerLink]="['/atendimentos', attendanceId, 'finalizar']" routerLinkActive="active" [class.active]="active === 'finalizar'">Finalizar</a>
+      @if(canSection('historico')){
+        <a
+          [routerLink]="['/atendimentos/historico']"
+          [queryParams]="{ patientId }"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: false }"
+          [class.active]="active === 'historico'"
+        >Histórico</a>
+      }@else{
+        <span class="is-disabled" aria-disabled="true">Histórico</span>
+      }
+      @if(canSection('sinais-vitais')){
+        <a [routerLink]="['/atendimentos', attendanceId, 'sinais-vitais']" routerLinkActive="active" [class.active]="active === 'sinais-vitais'">Sinais vitais</a>
+      }@else{
+        <span class="is-disabled" aria-disabled="true">Sinais vitais</span>
+      }
+      @if(canSection('medico')){
+        <a [routerLink]="['/atendimentos', attendanceId, 'medico']" routerLinkActive="active" [class.active]="active === 'medico'">Médico</a>
+      }@else{
+        <span class="is-disabled" aria-disabled="true">Médico</span>
+      }
+      @if(canSection('tecnica')){
+        <a [routerLink]="['/atendimentos', attendanceId, 'tecnica']" routerLinkActive="active" [class.active]="active === 'tecnica'">Técnica</a>
+      }@else{
+        <span class="is-disabled" aria-disabled="true">Técnica</span>
+      }
+      @if(canSection('dispensar')){
+        <a [routerLink]="['/atendimentos', attendanceId, 'dispensar']" routerLinkActive="active" [class.active]="active === 'dispensar'">Dispensar</a>
+      }@else{
+        <span class="is-disabled" aria-disabled="true">Dispensar</span>
+      }
+      @if(canSection('finalizar')){
+        <a [routerLink]="['/atendimentos', attendanceId, 'finalizar']" routerLinkActive="active" [class.active]="active === 'finalizar'">Finalizar</a>
+      }@else{
+        <span class="is-disabled" aria-disabled="true">Finalizar</span>
+      }
     </nav>
   </div>
 }`,
@@ -39,7 +65,8 @@ import { workflowLabel } from './attendance-labels';
     .attendance-subnav-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
     .attendance-subnav-head h2 { margin: 0; font-size: 1.15rem; }
     .attendance-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-    .attendance-tabs a {
+    .attendance-tabs a,
+    .attendance-tabs span {
       padding: 8px 14px;
       border-radius: 8px;
       text-decoration: none;
@@ -52,6 +79,10 @@ import { workflowLabel } from './attendance-labels';
       background: var(--primary, #0f766e);
       color: #fff;
     }
+    .attendance-tabs .is-disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
   `],
 })
 export class AttendanceSubnavComponent {
@@ -63,4 +94,10 @@ export class AttendanceSubnavComponent {
   @Input() active: AttendanceSection = 'medico';
 
   readonly workflowLabel = workflowLabel;
+
+  constructor(public auth: AuthService) {}
+
+  canSection(section: AttendanceNavSection) {
+    return this.auth.canAccessAttendanceSection(section);
+  }
 }

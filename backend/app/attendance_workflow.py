@@ -42,6 +42,33 @@ def workflow_status(att: "Attendance") -> str:
     return "aguardando_enfermagem"
 
 
+def attendance_current_section(att: "Attendance") -> str:
+    status = workflow_status(att)
+    if status == "aguardando_sinais_vitais":
+        return "sinais-vitais"
+    if status == "aguardando_medico":
+        return "medico"
+    if status == "aguardando_tecnica":
+        return "tecnica"
+    if status == "concluido":
+        return "finalizar"
+    if has_prescription(att) and not has_dispensed(att):
+        return "dispensar"
+    return "finalizar"
+
+
+def attendance_phase_label(att: "Attendance") -> str:
+    section = attendance_current_section(att)
+    labels = {
+        "sinais-vitais": "Aguardando sinais vitais",
+        "medico": "Aguardando médico",
+        "tecnica": "Aguardando técnica",
+        "dispensar": "Aguardando dispensação",
+        "finalizar": "Concluído" if workflow_status(att) == "concluido" else "Aguardando finalização",
+    }
+    return labels.get(section, section)
+
+
 def _is_enfermeira(profile: "Profile") -> bool:
     return profile.is_admin or profile.clinical_slug == "enfermeira"
 

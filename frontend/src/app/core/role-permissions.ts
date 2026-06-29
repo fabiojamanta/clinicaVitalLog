@@ -175,3 +175,68 @@ export function isReadOnlyCadastro(p: UserProfile | null, perms: PermissionMap, 
 export function roleLabel(profile: UserProfile | null | undefined): string {
   return profile?.name ?? '';
 }
+
+export type AttendanceNavSection =
+  | 'historico'
+  | 'sinais-vitais'
+  | 'medico'
+  | 'tecnica'
+  | 'dispensar'
+  | 'finalizar';
+
+export type SessionNavSection =
+  | 'resumo'
+  | 'medicamentos'
+  | 'aplicacao'
+  | 'assinatura'
+  | 'enfermagem';
+
+export function canAccessAttendanceSection(
+  p: UserProfile | null,
+  perms: PermissionMap,
+  section: AttendanceNavSection,
+): boolean {
+  if (isAdmin(p)) return true;
+  if (!canReadMenu(p, perms, 'atendimentos')) return false;
+
+  switch (section) {
+    case 'historico':
+      return true;
+    case 'sinais-vitais':
+      return canEditVitals(p, perms);
+    case 'medico':
+      return canEditDoctorSection(p, perms);
+    case 'tecnica':
+      return canEditTechSection(p, perms);
+    case 'dispensar':
+      return canDispenseMedication(p, perms);
+    case 'finalizar':
+      return canEditNursingSection(p, perms);
+    default:
+      return false;
+  }
+}
+
+export function canAccessSessionSection(
+  p: UserProfile | null,
+  perms: PermissionMap,
+  section: SessionNavSection,
+): boolean {
+  if (isAdmin(p)) return true;
+  if (!canReadMenu(p, perms, 'atendimentos')) return false;
+
+  switch (section) {
+    case 'resumo':
+      return true;
+    case 'medicamentos':
+      return canDispenseMedication(p, perms);
+    case 'aplicacao':
+      return canEditTechSection(p, perms);
+    case 'assinatura':
+      return canExecuteSession(p, perms);
+    case 'enfermagem':
+      return canFinalizeSession(p, perms);
+    default:
+      return false;
+  }
+}

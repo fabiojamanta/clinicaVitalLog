@@ -45,6 +45,8 @@ from ..permissions import (
     has_menu_access,
 )
 from ..attendance_workflow import (
+    attendance_current_section,
+    attendance_phase_label,
     pending_items_for_role,
     session_pending_items_for_role,
     session_status,
@@ -182,6 +184,9 @@ def list_attendances(
             patient_name=r.patient.name if r.patient else None,
             attendance_date=r.attendance_date,
             created_at=r.created_at,
+            workflow_status=workflow_status(r),
+            phase_label=attendance_phase_label(r),
+            current_section=attendance_current_section(r),
         )
         for r in rows
     ]

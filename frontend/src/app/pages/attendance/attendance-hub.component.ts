@@ -48,31 +48,73 @@ import { Attendance, AttendanceListItem } from './attendance.types';
   <div class="card">
     <h3>Acesso rápido</h3>
     <div class="hub-actions">
-      <a class="hub-card" [routerLink]="['/atendimentos/historico']" [queryParams]="{ patientId: selectedPatientId }">
-        <strong>Histórico</strong>
-        <span>Atendimentos anteriores do paciente</span>
-      </a>
+      @if(auth.canAccessAttendanceSection('historico')){
+        <a class="hub-card" [routerLink]="['/atendimentos/historico']" [queryParams]="{ patientId: selectedPatientId }">
+          <strong>Histórico</strong>
+          <span>Atendimentos anteriores do paciente</span>
+        </a>
+      }@else{
+        <div class="hub-card is-disabled" aria-disabled="true">
+          <strong>Histórico</strong>
+          <span>Atendimentos anteriores do paciente</span>
+        </div>
+      }
       @if(latestAttendanceId){
-        <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'sinais-vitais']">
-          <strong>Sinais vitais</strong>
-          <span>Primeira etapa do atendimento</span>
-        </a>
-        <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'medico']">
-          <strong>Consulta médica</strong>
-          <span>Último atendimento · {{ latestAttendanceDate | dateBr }}</span>
-        </a>
-        <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'tecnica']">
-          <strong>Técnica de enfermagem</strong>
-          <span>Anotações da aplicação</span>
-        </a>
-        <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'dispensar']">
-          <strong>Dispensar medicamento</strong>
-          <span>Saída de estoque do atendimento</span>
-        </a>
-        <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'finalizar']">
-          <strong>Finalizar enfermagem</strong>
-          <span>Encerramento do atendimento</span>
-        </a>
+        @if(auth.canAccessAttendanceSection('sinais-vitais')){
+          <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'sinais-vitais']">
+            <strong>Sinais vitais</strong>
+            <span>Primeira etapa do atendimento</span>
+          </a>
+        }@else{
+          <div class="hub-card is-disabled" aria-disabled="true">
+            <strong>Sinais vitais</strong>
+            <span>Primeira etapa do atendimento</span>
+          </div>
+        }
+        @if(auth.canAccessAttendanceSection('medico')){
+          <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'medico']">
+            <strong>Consulta médica</strong>
+            <span>Último atendimento · {{ latestAttendanceDate | dateBr }}</span>
+          </a>
+        }@else{
+          <div class="hub-card is-disabled" aria-disabled="true">
+            <strong>Consulta médica</strong>
+            <span>Último atendimento · {{ latestAttendanceDate | dateBr }}</span>
+          </div>
+        }
+        @if(auth.canAccessAttendanceSection('tecnica')){
+          <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'tecnica']">
+            <strong>Técnica de enfermagem</strong>
+            <span>Anotações da aplicação</span>
+          </a>
+        }@else{
+          <div class="hub-card is-disabled" aria-disabled="true">
+            <strong>Técnica de enfermagem</strong>
+            <span>Anotações da aplicação</span>
+          </div>
+        }
+        @if(auth.canAccessAttendanceSection('dispensar')){
+          <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'dispensar']">
+            <strong>Dispensar medicamento</strong>
+            <span>Saída de estoque do atendimento</span>
+          </a>
+        }@else{
+          <div class="hub-card is-disabled" aria-disabled="true">
+            <strong>Dispensar medicamento</strong>
+            <span>Saída de estoque do atendimento</span>
+          </div>
+        }
+        @if(auth.canAccessAttendanceSection('finalizar')){
+          <a class="hub-card" [routerLink]="['/atendimentos', latestAttendanceId, 'finalizar']">
+            <strong>Finalizar enfermagem</strong>
+            <span>Encerramento do atendimento</span>
+          </a>
+        }@else{
+          <div class="hub-card is-disabled" aria-disabled="true">
+            <strong>Finalizar enfermagem</strong>
+            <span>Encerramento do atendimento</span>
+          </div>
+        }
       }
     </div>
     @if(!latestAttendanceId){
@@ -87,6 +129,11 @@ import { Attendance, AttendanceListItem } from './attendance.types';
       text-decoration: none; color: inherit; background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.15);
     }
     .hub-card:hover { background: rgba(15, 118, 110, 0.12); }
+    .hub-card.is-disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
     .hub-card strong { font-size: 1rem; }
     .hub-card span { font-size: 0.85rem; color: #64748b; }
   `],
