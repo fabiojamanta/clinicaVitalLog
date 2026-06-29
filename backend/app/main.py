@@ -134,7 +134,10 @@ def seed():
                 User.clinic_id == clinic.id,
                 User.email == admin_email,
             ).first()
-            if not existing_admin:
+            if existing_admin:
+                if not settings.is_production and admin_password:
+                    existing_admin.password_hash = get_password_hash(admin_password)
+            elif admin_email and admin_password:
                 db.add(User(
                     clinic_id=clinic.id,
                     profile_id=admin_profile.id,
